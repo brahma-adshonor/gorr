@@ -51,7 +51,7 @@ func TestRecordHttp(t *testing.T) {
 	assert.Nil(t, err)
 
 	assert.Equal(t, 2, len(ti.DB))
-	assert.Equal(t, 1, len(ti.Flags))
+	assert.Equal(t, 2, len(ti.Flags))
 	assert.Equal(t, 1, len(ti.TestCases))
 
 	assert.Equal(t, "-regression_run_type=2", ti.Flags[0])

@@ -22,10 +22,6 @@ var (
 	globalConnValue = &grpc.ClientConn{}
 )
 
-func init() {
-	EnableRegressionEngine(RegressionRecord)
-}
-
 func grpcInvokeDummy(cc *grpc.ClientConn, ctx context.Context, method string, args, reply interface{}, opts ...grpc.CallOption) error {
 	globalConnValue = cc
 	fmt.Printf("calling dummy invoke from testing, cc:%p\n", cc)
@@ -49,6 +45,8 @@ func grpcInvokeDummy(cc *grpc.ClientConn, ctx context.Context, method string, ar
 }
 
 func setupHook(t *testing.T) {
+	enableRegressionEngine(RegressionRecord)
+
 	GlobalMgr.SetState(RegressionRecord)
 	GlobalMgr.SetStorage(NewMapStorage(100))
 

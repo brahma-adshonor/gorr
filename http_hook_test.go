@@ -23,7 +23,7 @@ func (h *dummyHttpHandlerForTest) ServeHTTP(w http.ResponseWriter, r *http.Reque
 }
 
 func TestHttpGet(t *testing.T) {
-	EnableRegressionEngine(RegressionRecord)
+	enableRegressionEngine(RegressionRecord)
 	UnHookHttpServerHandler()
 
 	h := &dummyHttpHandlerForTest{}

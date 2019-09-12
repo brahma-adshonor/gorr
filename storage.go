@@ -17,12 +17,6 @@ var (
 	regression_bolt_bucket_name = flag.String("regression_bolt_bucket_name", "global_bucket", "bucket name used by regression in bolt db")
 )
 
-type BoltStorage struct {
-	db   *bolt.DB
-	mu   sync.Mutex
-	file map[string]int
-}
-
 type MapStorage struct {
 	mu sync.Mutex
 	m  map[string][]byte
@@ -62,6 +56,12 @@ func (s *MapStorage) Close() {
 
 func (s *MapStorage) AllFiles() []string {
 	return nil
+}
+
+type BoltStorage struct {
+	db   *bolt.DB
+	mu   sync.Mutex
+	file map[string]int
 }
 
 // bolt key/value db
@@ -189,11 +189,17 @@ func (s *BoltStorage) Clear() {
 }
 
 func (s *BoltStorage) Close() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	s.db.Close()
 	s.db = nil
 }
 
 func (s *BoltStorage) AllFiles() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	all := []string{s.db.Path()}
 	for k := range s.file {
 		all = append(all, k)

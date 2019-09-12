@@ -3,6 +3,7 @@ package regression
 import (
 	//"fmt"
 	"github.com/stretchr/testify/assert"
+	"os"
 	"runtime"
 	"testing"
 )
@@ -40,6 +41,12 @@ func TestBoltDb(t *testing.T) {
 	*bolt_db_big_value_thresh = 1024
 	db, err = NewBoltStorage("./r.test.data")
 	assert.Nil(t, err)
+
+	defer func() {
+		for _, f := range db.AllFiles() {
+			os.Remove(f)
+		}
+	}()
 
 	d5, err6 := db.Get("miliao")
 	assert.Nil(t, err6)

@@ -12,7 +12,7 @@ import (
 )
 
 func init() {
-	EnableRegressionEngine(RegressionRecord)
+	enableRegressionEngine(RegressionRecord)
 	GlobalMgr.SetStorage(NewMapStorage(100))
 
 	GlobalMgr.SetNotify(func(t string, key string, value []byte) {

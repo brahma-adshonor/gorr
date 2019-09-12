@@ -2,12 +2,19 @@ package regression
 
 import (
 	"context"
+	"flag"
 	"github.com/brahma-adshonor/gohook"
 )
 
 const (
-	RegressionRecord = 111
-	RegressionReplay = 222
+	RegressionNone   = 0
+	RegressionRecord = 1
+	RegressionReplay = 2
+)
+
+const (
+	RegressionResetNone    = 0
+	RegressionResetStorage = 0
 )
 
 const (
@@ -30,13 +37,31 @@ type RegressionMgr struct {
 	state    int
 	store    Storage
 	globalId string
+	reset    func(int)
 	notifier func(src string, key string, value []byte)
 	genKey   func(hook int, cxt context.Context, value interface{}) string
 }
 
-var GlobalMgr *RegressionMgr
+var (
+	GlobalMgr *RegressionMgr
 
-func EnableRegressionEngine(state int) {
+	RegressionRunType     = flag.Int("regression_run_type", 0, "turn on/off regression(0 for off, 1 for record, 2 for replay)")
+	RegressionDbFile      = flag.String("regression_db_file", "regression.db", "file name regression db")
+	RegressionDbDirectory = flag.String("regression_db_dir", "/var/data/regression", "directory to get regression db")
+)
+
+func InitRegressionEngine() int {
+	if *RegressionRunType == 0 {
+		return 0
+	}
+
+	enableRegressionEngine(*RegressionRunType)
+	GlobalMgr.SetBoltStorage(*RegressionDbDirectory + "/" + *RegressionDbFile)
+
+	return *RegressionRunType
+}
+
+func enableRegressionEngine(state int) {
 	if GlobalMgr != nil {
 		return
 	}
@@ -46,10 +71,21 @@ func EnableRegressionEngine(state int) {
 
 func newRegressionMgr(state int) *RegressionMgr {
 	r := &RegressionMgr{store: nil, state: state}
+	r.reset = func(int) {}
 	r.notifier = func(string, string, []byte) {}
 	r.genKey = func(int, context.Context, interface{}) string { return "" }
 	r.globalId = "regression_global_trace_id@@20190618"
 	return r
+}
+
+func (r *RegressionMgr) SetBoltStorageFile(file string) error {
+	err := r.SetBoltStorage(*RegressionDbDirectory + "/" + file)
+	if err != nil {
+		return err
+	}
+
+	r.reset(RegressionResetStorage)
+	return err
 }
 
 func (r *RegressionMgr) SetBoltStorage(path string) error {
@@ -82,6 +118,10 @@ func (r *RegressionMgr) SetState(state int) {
 
 func (r *RegressionMgr) ShouldRecord() bool {
 	return r.state == RegressionRecord
+}
+
+func (r *RegressionMgr) SetReset(fn func(int)) {
+	r.reset = fn
 }
 
 func (r *RegressionMgr) SetNotify(fn func(string, string, []byte)) {

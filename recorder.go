@@ -125,6 +125,11 @@ func RecordData(req []byte, rsp []byte, desc string, db []string) (error, string
 		},
 	}
 
+	if len(data) > 0 {
+		mainDb := fmt.Sprintf("-regression_db_file=%s", data[0])
+		td.Flags = append(td.Flags, mainDb)
+	}
+
 	conf, err2 := json.MarshalIndent(td, "", "\t")
 	if err2 != nil {
 		return fmt.Errorf("generate test case config failed, err:%s", err2.Error()), ""
