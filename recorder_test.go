@@ -12,7 +12,7 @@ import (
 )
 
 func TestRecordHttp(t *testing.T) {
-	*regression_output_dir = "/tmp"
+	*RegressionOutputDir = "/tmp"
 
 	body1 := "miliao-http-test-data-set"
 	req, err := http.NewRequest("POST", "http://some-no-exist.url.com", strings.NewReader(body1))
@@ -30,11 +30,11 @@ func TestRecordHttp(t *testing.T) {
 	ioutil.WriteFile(db2, []byte("ddddd"), 0644)
 
 	var out string
-	err, out = RecordHttp("miliao_http_test", req, rsp, []string{db1, db2})
+	out, err = RecordHttp("miliao_http_test", req, rsp, []string{db1, db2})
 	assert.Nil(t, err)
 
-	reqData, err1 := ioutil.ReadFile(out + "/reg_req.dat")
-	rspData, err2 := ioutil.ReadFile(out + "/reg_rsp.dat")
+	reqData, err1 := ioutil.ReadFile(out + "/reg_req_.dat")
+	rspData, err2 := ioutil.ReadFile(out + "/reg_rsp_.dat")
 
 	assert.Nil(t, err1)
 	assert.Nil(t, err2)
@@ -56,13 +56,13 @@ func TestRecordHttp(t *testing.T) {
 
 	assert.Equal(t, "-regression_run_type=2", ti.Flags[0])
 	assert.Equal(t, []string{"reg_db1.db", "reg_db2.db"}, ti.DB)
-	assert.Equal(t, TestCase{Req: "reg_req.dat", Rsp: "reg_rsp.dat", Desc: "miliao_http_test"}, ti.TestCases[0])
+	assert.Equal(t, TestCase{Req: "reg_req_.dat", Rsp: "reg_rsp_.dat", Desc: "miliao_http_test"}, ti.TestCases[0])
 
 	os.RemoveAll(out)
 }
 
 func TestRecordGrpc(t *testing.T) {
-	*regression_output_dir = "/tmp"
+	*RegressionOutputDir = "/tmp"
 
 	req := &GrpcHookRequest{
 		ReqId:   2333,
@@ -82,15 +82,15 @@ func TestRecordGrpc(t *testing.T) {
 	ioutil.WriteFile(db2, []byte("ddddd"), 0644)
 
 	var out string
-	err, out := RecordGrpc("miliao_test_grpc_record", req, rsp, []string{db1, db2})
+	out, err := RecordGrpc("miliao_test_grpc_record", req, rsp, []string{db1, db2})
 
 	assert.Nil(t, err)
 
 	os.Remove(db1)
 	os.Remove(db2)
 
-	reqData, err1 := ioutil.ReadFile(out + "/reg_req.dat")
-	rspData, err2 := ioutil.ReadFile(out + "/reg_rsp.dat")
+	reqData, err1 := ioutil.ReadFile(out + "/reg_req_.dat")
+	rspData, err2 := ioutil.ReadFile(out + "/reg_rsp_.dat")
 
 	assert.Nil(t, err1)
 	assert.Nil(t, err2)

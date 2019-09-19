@@ -4,7 +4,6 @@ import (
 	"adshonor/common/util"
 	"bytes"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"github.com/golang/protobuf/proto"
 	"io/ioutil"
@@ -32,82 +31,88 @@ type TestItem struct {
 	TestCases []TestCase `json:"cases"`
 }
 
-var (
-	regression_output_dir = flag.String("regression_record_output_dir", "/var/data/conf/regression", "dir to store auto generated test cases")
-)
-
-func RecordHttp(desc string, req *http.Request, rsp *http.Response, db []string) (error, string) {
+func RecordHttp(desc string, req *http.Request, rsp *http.Response, db []string) (string, error) {
 	if req.Body == nil || rsp.Body == nil {
-		return fmt.Errorf("invalid http data, req/rsp must contain body"), ""
+		return "", fmt.Errorf("invalid http data, req/rsp must contain body")
 	}
 
 	reqBody, err1 := ioutil.ReadAll(req.Body)
 	if err1 != nil {
-		return fmt.Errorf("read http req body failed, err:%s", err1.Error()), ""
+		return "", fmt.Errorf("read http req body failed, err:%s", err1.Error())
 	}
 	req.Body.Close()
 	req.Body = ioutil.NopCloser(bytes.NewBuffer(reqBody))
 
 	rspBody, err2 := ioutil.ReadAll(rsp.Body)
 	if err1 != nil {
-		return fmt.Errorf("read http rsp body failed, err:%s", err2.Error()), ""
+		return "", fmt.Errorf("read http rsp body failed, err:%s", err2.Error())
 	}
 	rsp.Body.Close()
 	rsp.Body = ioutil.NopCloser(bytes.NewBuffer(rspBody))
 
-	return RecordData(reqBody, rspBody, desc, db)
+	outDir := createOutputDir("case")
+	return RecordData(outDir, "", reqBody, rspBody, desc, db)
 }
 
-func RecordGrpc(desc string, req proto.Message, rsp proto.Message, db []string) (error, string) {
+func RecordGrpc(desc string, req proto.Message, rsp proto.Message, db []string) (string, error) {
 	d1, err1 := json.Marshal(req)
 	if err1 != nil {
-		return fmt.Errorf("marshal grpc request failed, err:%s", err1.Error()), ""
+		return "", fmt.Errorf("marshal grpc request failed, err:%s", err1.Error())
 	}
 
+	outDir := createOutputDir("case")
 	d2 := proto.MarshalTextString(rsp)
-	return RecordData(d1, []byte(d2), desc, db)
+
+	return RecordData(outDir, "", d1, []byte(d2), desc, db)
 }
 
-func createOutputDir() string {
+func genUniqueFileName(dir, prefix, suggest string) string {
+	name := fmt.Sprintf("%s_%s.dat", prefix, suggest)
+	path := dir + "/" + name
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return name
+	}
+
 	for i := 0; i < 102400; i++ {
-		path := fmt.Sprintf("%s/case%d", *regression_output_dir, i)
+		name = fmt.Sprintf("%s_%s_%d.dat", prefix, suggest, i)
+		path = dir + "/" + name
 		if _, err := os.Stat(path); os.IsNotExist(err) {
-			os.Mkdir(path, 0755)
-			return path
+			return name
 		}
 	}
 
 	panic("can not create regression output dir")
 }
 
-func RecordData(req []byte, rsp []byte, desc string, db []string) (error, string) {
-	outDir := createOutputDir()
+func RecordData(outDir, name string, req []byte, rsp []byte, desc string, db []string) (string, error) {
+	f1 := genUniqueFileName(outDir, "reg_req", name)
+	f2 := genUniqueFileName(outDir, "reg_rsp", name)
 
-	f1 := "reg_req.dat"
-	f2 := "reg_rsp.dat"
 	reqFile := outDir + "/" + f1
 	rspFile := outDir + "/" + f2
+	configFile := outDir + "/reg_config.json"
 
 	err := ioutil.WriteFile(reqFile, req, 0644)
 	if err != nil {
-		return err, ""
+		return "", err
 	}
+
 	err = ioutil.WriteFile(rspFile, rsp, 0644)
 	if err != nil {
-		return err, ""
+		return "", err
 	}
 
 	var data []string
 	for _, f := range db {
 		idx := strings.LastIndex(f, "/")
 		if idx == -1 {
-			return fmt.Errorf("invalid db file path, file:%s", f), ""
+			return "", fmt.Errorf("invalid db file path, file:%s", f)
 		}
 		name := f[idx+1:]
 		to := outDir + "/" + name
 		err = util.CopyFile(f, to)
 		if err != nil {
-			return fmt.Errorf("copy db file failed, from:%s, to:%s, err:%s", f, to, err.Error()), ""
+			return "", fmt.Errorf("copy db file failed, from:%s, to:%s, err:%s", f, to, err.Error())
 		}
 
 		data = append(data, name)
@@ -130,15 +135,25 @@ func RecordData(req []byte, rsp []byte, desc string, db []string) (error, string
 		td.Flags = append(td.Flags, mainDb)
 	}
 
+	cd, err := ioutil.ReadFile(configFile)
+	if err == nil && len(cd) > 0 {
+		var cf TestItem
+		err = json.Unmarshal(cd, &cf)
+		if err != nil {
+			return "", fmt.Errorf("unmarshal existed config failed, err:%s", err)
+		}
+		td.TestCases = append(td.TestCases, cf.TestCases...)
+	}
+
 	conf, err2 := json.MarshalIndent(td, "", "\t")
 	if err2 != nil {
-		return fmt.Errorf("generate test case config failed, err:%s", err2.Error()), ""
+		return "", fmt.Errorf("generate test case config failed, err:%s", err2.Error())
 	}
 
-	err = ioutil.WriteFile(outDir+"/reg_config.json", conf, 0644)
+	err = ioutil.WriteFile(configFile, conf, 0644)
 	if err != nil {
-		return fmt.Errorf("writing config file failed, err:%s", err.Error()), ""
+		return "", fmt.Errorf("writing config file failed, err:%s", err.Error())
 	}
 
-	return nil, outDir
+	return outDir, nil
 }

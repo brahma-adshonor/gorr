@@ -16,17 +16,23 @@ type HttpData struct {
 	Header http.Header
 }
 
-type HttpRecorderHandler func(pattern string, req *HttpData, rsp *HttpData)
+type HttpRequestFixer func(pattern string, data []byte) []byte
+type HttpRecorderHandler func(pattern, desc string, req *HttpData, rsp *HttpData)
+
+type httpHandleGroup struct {
+	fixer    HttpRequestFixer
+	recorder HttpRecorderHandler
+}
 
 var (
 	lock       sync.Mutex
-	handlerMap = make(map[string]HttpRecorderHandler)
+	handlerMap = make(map[string]httpHandleGroup)
 )
 
-func RegisterHttpRecorder(pattern string, handler HttpRecorderHandler) {
+func RegisterHttpRecorder(pattern string, handler HttpRecorderHandler, fix HttpRequestFixer) {
 	lock.Lock()
 	defer lock.Unlock()
-	handlerMap[pattern] = handler
+	handlerMap[pattern] = httpHandleGroup{recorder: handler, fixer: fix}
 }
 
 type httpResponseWriterWrap struct {
@@ -55,11 +61,22 @@ type httpRecorder struct {
 	pattern string
 	origin  http.Handler
 	handler HttpRecorderHandler
+	prepare func(string, []byte) []byte
 }
 
 func (h *httpRecorder) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	reqData, _ := ioutil.ReadAll(r.Body)
+
+	if h.prepare != nil {
+		reqData = h.prepare(h.pattern, reqData)
+	}
+
 	r.Body = ioutil.NopCloser(bytes.NewBuffer(reqData))
+
+	dname := r.Header.Get("RegressionName")
+
+	// reset user-agent
+	r.Header.Set("User-Agent", "RegressionTool")
 
 	wr := &httpResponseWriterWrap{}
 	wr.data.Status = -1
@@ -86,7 +103,7 @@ func (h *httpRecorder) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		defer reader.Close()
 	}
 
-	h.handler(h.pattern, req, &wr.data)
+	h.handler(h.pattern, dname, req, &wr.data)
 }
 
 func httpHandleHook(s *http.ServeMux, pattern string, handler http.Handler) {
@@ -97,7 +114,8 @@ func httpHandleHook(s *http.ServeMux, pattern string, handler http.Handler) {
 
 		if val, ok := handlerMap[pattern]; ok {
 			h = &httpRecorder{
-				handler: val,
+				prepare: val.fixer,
+				handler: val.recorder,
 				origin:  handler,
 				pattern: pattern,
 			}

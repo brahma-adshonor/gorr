@@ -3,6 +3,10 @@ package regression
 import (
 	"context"
 	"flag"
+	"fmt"
+	"os"
+	"time"
+
 	"github.com/brahma-adshonor/gohook"
 )
 
@@ -34,12 +38,13 @@ type Storage interface {
 }
 
 type RegressionMgr struct {
-	state    int
-	store    Storage
-	globalId string
-	reset    func(int)
-	notifier func(src string, key string, value []byte)
-	genKey   func(hook int, cxt context.Context, value interface{}) string
+	state          int
+	store          Storage
+	globalId       string
+	curTestSuitDir string
+	reset          func(int)
+	notifier       func(src string, key string, value []byte)
+	genKey         func(hook int, cxt context.Context, value interface{}) string
 }
 
 var (
@@ -48,6 +53,7 @@ var (
 	RegressionRunType     = flag.Int("regression_run_type", 0, "turn on/off regression(0 for off, 1 for record, 2 for replay)")
 	RegressionDbFile      = flag.String("regression_db_file", "regression.db", "file name regression db")
 	RegressionDbDirectory = flag.String("regression_db_dir", "/var/data/regression", "directory to get regression db")
+	RegressionOutputDir   = flag.String("regression_record_output_dir", "/var/data/conf/regression", "dir to store auto generated test cases")
 )
 
 func InitRegressionEngine() int {
@@ -78,6 +84,25 @@ func newRegressionMgr(state int) *RegressionMgr {
 	return r
 }
 
+func createOutputDir(prefix string) string {
+	tm := time.Now().Format("20060102150405")
+	path := fmt.Sprintf("%s/%s%s", *RegressionOutputDir, prefix, tm)
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		os.Mkdir(path, 0755)
+		return path
+	}
+
+	for i := 0; i < 102400; i++ {
+		path := fmt.Sprintf("%s/%s%s-%d", *RegressionOutputDir, prefix, tm, i)
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			os.Mkdir(path, 0755)
+			return path
+		}
+	}
+
+	return ""
+}
+
 func (r *RegressionMgr) SetBoltStorageFile(file string) error {
 	err := r.SetBoltStorage(*RegressionDbDirectory + "/" + file)
 	if err != nil {
@@ -94,14 +119,25 @@ func (r *RegressionMgr) SetBoltStorage(path string) error {
 		return err
 	}
 
+	dir := createOutputDir("ts")
+	if len(dir) == 0 {
+		return fmt.Errorf("create test suit output dir failed")
+	}
+
 	origin := r.store
+
 	r.store = db
+	r.curTestSuitDir = dir
 
 	if origin != nil {
 		origin.Close()
 	}
 
 	return nil
+}
+
+func (r *RegressionMgr) GetCurrentTestSuitDir() string {
+	return r.curTestSuitDir
 }
 
 func (r *RegressionMgr) GetDebugInfo() string {

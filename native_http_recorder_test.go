@@ -54,13 +54,13 @@ func TestRegister(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 
-	RegisterHttpRecorder("/test_point2", func(p string, r *HttpData, s *HttpData) {
+	RegisterHttpRecorder("/test_point2", func(p, n string, r *HttpData, s *HttpData) {
 		fmt.Printf("recorder handler enter!\n")
 		assert.Equal(t, 233, s.Status)
 		assert.Equal(t, reqData, r.Body)
 		assert.Equal(t, rspData, s.Body)
 		wg.Done()
-	})
+	}, nil)
 
 	http.Handle("/test_point2", h)
 	assert.Equal(t, 1, len(handlerMap))
