@@ -26,6 +26,17 @@ Redis command object(StringCmd, IntCmd, etc) is immutable, we are not able to se
 the workaround for this is we are going to hook the getter of the object. and maybe we should make a pull request to upstream, adding setter api to redis Command object.
 */
 
+/*
+hook point:
+1. Client.Process()/ClusterClient.Process: for recoding/replaying cmd
+2. Client.WrapProcess(): for go redis < 6.15.1, Client.Process() is not available.
+3. NewClient()/NewRedisClient(): used to call WrapProcess()/AdHook() on client objects.
+4. IntCmd/StringCmd/FloatCmd/SliceCmd/StatusCmd/etc: hook Result()/Val() method.
+5. Client.WrapPipelineProcess()/ClusterClient.WrapPipelineProcess(): for go redis < 6.15.1, used to intercept queued cmds.
+6. hook added by Client.AddHook()/ClusterClient.AdHook(): for go redis > 6.15.1, used to intercept pipeline cmd.
+7. Pipeline.Exec()/Pipeline.ExecContext(): used to ignore dummy error from hook added by AdHook()
+*/
+
 // client.Process wrapper
 func clientProcessWrapper(c *redis.Client, oldProcess func(cmd redis.Cmder) error) func(redis.Cmder) error {
 	return func(cmd redis.Cmder) error {
