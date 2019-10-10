@@ -1,10 +1,12 @@
 package regression
 
 import (
+	"context"
 	"fmt"
 	"github.com/brahma-adshonor/gohook"
 	"github.com/go-redis/redis"
 	"github.com/stretchr/testify/assert"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -77,12 +79,14 @@ func clusterClientProcessTramplineHook(c *redis.ClusterClient, cmd redis.Cmder) 
 }
 
 func wrapRedisClientProcessHook(c *redis.Client, fn func(func(redis.Cmder) error) func(redis.Cmder) error) bool {
+	// setup 'old' processor
 	wrapRedisClientProcessTrampoline(c, func(func(redis.Cmder) error) func(redis.Cmder) error {
 		return func(redis.Cmder) error {
 			return nil
 		}
 	})
 
+	// install 'new' processor
 	return wrapRedisClientProcessTrampoline(c, fn)
 }
 
@@ -102,15 +106,72 @@ func wrapRedisClientProcessTrampoline(c *redis.Client, fn func(func(redis.Cmder)
 	return true
 }
 
+func wrapPipelineProcessHook(c interface{}, fn func(func([]redis.Cmder) error) func([]redis.Cmder) error) bool {
+	wrapPipelineProcessTrampoline(c, func(func([]redis.Cmder) error) func([]redis.Cmder) error {
+		return func([]redis.Cmder) error {
+			return nil
+		}
+	})
+
+	return wrapPipelineProcessTrampoline(c, fn)
+}
+
+//go:noinline
+func wrapPipelineProcessTrampoline(c interface{}, fn func(func([]redis.Cmder) error) func([]redis.Cmder) error) bool {
+	fmt.Printf("dummy function for regrestion testing")
+
+	for i := 0; i < 100000; i++ {
+		fmt.Printf("id:%d\n", i)
+		go func() { fmt.Printf("hello world\n") }()
+	}
+
+	if c != nil {
+		panic("trampoline redis WrapClientProcess() function is not allowed to be called")
+	}
+
+	return true
+}
+
+func pipelineExecHook(*redis.Pipeline) ([]redis.Cmder, error) {
+	ret := []redis.Cmder{redis.NewStringCmd("get", "1"), redis.NewStringCmd("get", "2")}
+	return ret, nil
+}
+
+type redisTestHook struct {
+	id string
+}
+
+func (rh *redisTestHook) BeforeProcess(ctx context.Context, cmd redis.Cmder) (context.Context, error) {
+	return ctx, nil
+}
+
+func (rh *redisTestHook) AfterProcess(ctx context.Context, cmd redis.Cmder) error {
+	return nil
+}
+
+func (rh *redisTestHook) BeforeProcessPipeline(ctx context.Context, cmds []redis.Cmder) (context.Context, error) {
+	if GlobalMgr.ShouldRecord() {
+		for _, cc := range cmds {
+			key := buildRedisCmdKey(rh.id, cc)
+			saveRedisCmdValue(key, cc)
+		}
+		return ctx, errRedisPipeNorm
+	}
+	return ctx, nil
+}
+
+func (rh *redisTestHook) AfterProcessPipeline(ctx context.Context, cmds []redis.Cmder) error {
+	return nil
+}
+
 func setupRedisHook(t *testing.T) {
+	enableRegressionEngine(RegressionRecord)
+
 	GlobalMgr.SetState(RegressionRecord)
 	GlobalMgr.SetStorage(NewMapStorage(100))
 
 	GlobalMgr.SetNotify(func(t string, key string, value []byte) {
-		fmt.Printf("regression event, type:%s, key(%d):%s, value:%s, hex:", t, len(key), key, string(value))
-		for _, b := range value {
-			fmt.Printf("%x ", b)
-		}
+		fmt.Printf("regression event, type:%s, key(%d):%s, value:%s", t, len(key), key, string(value))
 		fmt.Printf("\n")
 	})
 
@@ -128,16 +189,23 @@ func setupRedisHook(t *testing.T) {
 	}
 	assert.Nil(t, err2)
 
-	err3 := gohook.Hook(WrapRedisClientProcess, wrapRedisClientProcessHook, wrapRedisClientProcessTrampoline)
+	err3 := gohook.Hook(wrapRedisClientProcess, wrapRedisClientProcessHook, wrapRedisClientProcessTrampoline)
 	if err3 != nil {
 		fmt.Printf("hook redis client trampoline failed, err:%s", err3.Error())
 	}
 	assert.Nil(t, err3)
 
+	err4 := gohook.Hook(wrapRedisPipelineProcessor, wrapPipelineProcessHook, wrapPipelineProcessTrampoline)
+	if err4 != nil {
+		fmt.Printf("hook redis pipeline processor wrapper failed, err:%s", err4.Error())
+	}
+	assert.Nil(t, err4)
+
 	fmt.Printf("debug:\n%s\n", GlobalMgr.GetDebugInfo())
 }
 
 func setupRedisClusterHook(t *testing.T) {
+	enableRegressionEngine(RegressionRecord)
 	GlobalMgr.SetState(RegressionRecord)
 	GlobalMgr.SetStorage(NewMapStorage(100))
 
@@ -155,6 +223,12 @@ func setupRedisClusterHook(t *testing.T) {
 	}
 
 	assert.Nil(t, err2)
+
+	err4 := gohook.Hook(wrapRedisPipelineProcessor, wrapPipelineProcessHook, wrapPipelineProcessTrampoline)
+	if err4 != nil {
+		fmt.Printf("hook redis pipeline processor wrapper failed, err:%s", err4.Error())
+	}
+	assert.Nil(t, err4)
 
 	fmt.Printf("debug:\n%s\n", GlobalMgr.GetDebugInfo())
 }
@@ -184,6 +258,30 @@ func TestStringCmd(t *testing.T) {
 	assert.NotNil(t, c)
 
 	c.Get("foo_the_bar")
+
+	pp := c.Pipeline()
+
+	if redisHasHook {
+		m := reflect.ValueOf(c).MethodByName("AddHook")
+		if !m.IsNil() {
+			id := buildRedisClientId(c)
+			m.Call([]reflect.Value{reflect.ValueOf(&redisTestHook{id: id})})
+		}
+	}
+
+	fmt.Printf("@@@@@redis pipeline type:%v\n", pp)
+
+	pp.Get("foo2")
+	pp.Get("foo3")
+	res, err22 := pp.Exec()
+	assert.Nil(t, err22)
+	assert.Equal(t, 2, len(res))
+
+	v1, _ := res[0].(*redis.StringCmd).Result()
+	v2, _ := res[1].(*redis.StringCmd).Result()
+
+	assert.Equal(t, redisStringValue, v1)
+	assert.Equal(t, redisStringValue, v2)
 
 	redisStoredString := redisStringValue
 	redisStringValue = "dummy"
@@ -218,10 +316,36 @@ func TestStringCmd(t *testing.T) {
 	assert.Equal(t, redisStoredString, val1)
 	assert.Equal(t, redisStoredString, val2)
 
+	{
+		pp2 := c2.Pipeline()
+		if redisHasHook {
+			m := reflect.ValueOf(c2).MethodByName("AddHook")
+			if !m.IsNil() {
+				id := buildRedisClientId(c2)
+				m.Call([]reflect.Value{reflect.ValueOf(&redisTestHook{id: id})})
+			}
+		}
+
+		pp2.Get("foo2")
+		pp2.Get("foo3")
+
+		res2, err23 := pp2.Exec()
+		assert.Nil(t, err23)
+		assert.Equal(t, 2, len(res2))
+
+		v21, _ := res2[0].(*redis.StringCmd).Result()
+		v22, _ := res2[1].(*redis.StringCmd).Result()
+
+		assert.Equal(t, v1, v21)
+		assert.Equal(t, v2, v22)
+	}
+
 	redisStringValue = redisStoredString
 }
 
 func TestIntCmd(t *testing.T) {
+	fmt.Printf("@@@@@start testing IntCmd\n")
+
 	setupRedisHook(t)
 
 	defer func() {
@@ -255,6 +379,7 @@ func TestIntCmd(t *testing.T) {
 	gohook.UnHook(redisClientProcessTrampoline)
 	UnHookRedisFunc()
 
+	fmt.Printf("@@@@@now to start replay\n")
 	GlobalMgr.SetState(RegressionReplay)
 	err4 := HookRedisFunc()
 	if err4 != nil {
@@ -299,6 +424,30 @@ func TestStatusCmd(t *testing.T) {
 
 	c.Ping()
 
+	pp := c.Pipeline()
+
+	if redisHasHook {
+		m := reflect.ValueOf(c).MethodByName("AddHook")
+		if !m.IsNil() {
+			id := buildRedisClusterClientId(c)
+			m.Call([]reflect.Value{reflect.ValueOf(&redisTestHook{id: id})})
+		}
+	}
+
+	fmt.Printf("@@@@@redis pipeline type:%v\n", pp)
+
+	pp.Type("foo2")
+	pp.Type("foo3")
+	res, err22 := pp.Exec()
+	assert.Nil(t, err22)
+	assert.Equal(t, 2, len(res))
+
+	v1, _ := res[0].(*redis.StatusCmd).Result()
+	v2, _ := res[1].(*redis.StatusCmd).Result()
+
+	assert.Equal(t, redisStringValue, v1)
+	assert.Equal(t, redisStringValue, v2)
+
 	redisStoredString := redisStringValue
 	redisStringValue = "dummy"
 	gohook.UnHookMethod(&sc1, "Val")
@@ -321,6 +470,23 @@ func TestStatusCmd(t *testing.T) {
 
 	assert.Equal(t, redisStoredString, val1)
 	assert.Equal(t, redisStoredString, val2)
+
+	{
+		pp2 := c.Pipeline()
+
+		pp2.Type("foo2")
+		pp2.Type("foo3")
+
+		res2, err23 := pp2.Exec()
+		assert.Nil(t, err23)
+		assert.Equal(t, 2, len(res2))
+
+		v21, _ := res2[0].(*redis.StatusCmd).Result()
+		v22, _ := res2[1].(*redis.StatusCmd).Result()
+
+		assert.Equal(t, v1, v21)
+		assert.Equal(t, v2, v22)
+	}
 
 	redisStringValue = redisStoredString
 }
