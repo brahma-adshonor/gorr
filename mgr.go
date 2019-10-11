@@ -1,4 +1,4 @@
-package regression
+package gorr
 
 import (
 	"context"
@@ -50,10 +50,10 @@ type RegressionMgr struct {
 var (
 	GlobalMgr *RegressionMgr
 
-	RegressionRunType     = flag.Int("regression_run_type", 0, "turn on/off regression(0 for off, 1 for record, 2 for replay)")
-	RegressionDbFile      = flag.String("regression_db_file", "regression.db", "file name regression db")
-	RegressionDbDirectory = flag.String("regression_db_dir", "/var/data/regression", "directory to get regression db")
-	RegressionOutputDir   = flag.String("regression_record_output_dir", "/var/data/conf/regression", "dir to store auto generated test cases")
+	RegressionRunType     = flag.Int("gorr_run_type", 0, "turn on/off gorr(0 for off, 1 for record, 2 for replay)")
+	RegressionDbFile      = flag.String("gorr_db_file", "gorr.db", "file name gorr db")
+	RegressionDbDirectory = flag.String("gorr_db_dir", "/var/data/gorr", "directory to get gorr db")
+	RegressionOutputDir   = flag.String("gorr_record_output_dir", "/var/data/conf/gorr", "dir to store auto generated test cases")
 )
 
 func InitRegressionEngine() int {
@@ -80,7 +80,7 @@ func newRegressionMgr(state int) *RegressionMgr {
 	r.reset = func(int) {}
 	r.notifier = func(string, string, []byte) {}
 	r.genKey = func(int, context.Context, interface{}) string { return "" }
-	r.globalId = "regression_global_trace_id@@20190618"
+	r.globalId = "gorr_global_trace_id@@20190618"
 	return r
 }
 

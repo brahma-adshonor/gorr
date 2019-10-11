@@ -1,4 +1,4 @@
-package regression
+package gorr
 
 import (
 	"fmt"
@@ -16,7 +16,7 @@ func init() {
 	GlobalMgr.SetStorage(NewMapStorage(100))
 
 	GlobalMgr.SetNotify(func(t string, key string, value []byte) {
-		fmt.Printf("regression hook event, type:%s, key:%s, value:%s\n", t, key, string(value))
+		fmt.Printf("gorr hook event, type:%s, key:%s, value:%s\n", t, key, string(value))
 	})
 }
 

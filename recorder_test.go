@@ -1,4 +1,4 @@
-package regression
+package gorr
 
 import (
 	"encoding/json"
@@ -54,7 +54,7 @@ func TestRecordHttp(t *testing.T) {
 	assert.Equal(t, 2, len(ti.Flags))
 	assert.Equal(t, 1, len(ti.TestCases))
 
-	assert.Equal(t, "-regression_run_type=2", ti.Flags[0])
+	assert.Equal(t, "-gorr_run_type=2", ti.Flags[0])
 	assert.Equal(t, []string{"reg_db1.db", "reg_db2.db"}, ti.DB)
 	assert.Equal(t, TestCase{Req: "reg_req_.dat", Rsp: "reg_rsp_.dat", Desc: "miliao_http_test"}, ti.TestCases[0])
 

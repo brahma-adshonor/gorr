@@ -1,4 +1,4 @@
-package regression
+package gorr
 
 import (
 	"fmt"

@@ -1,4 +1,4 @@
-package regression
+package gorr
 
 import (
 	"adshonor/common/util"
@@ -81,7 +81,7 @@ func genUniqueFileName(dir, prefix, suggest string) string {
 		}
 	}
 
-	panic("can not create regression output dir")
+	panic("can not create gorr output dir")
 }
 
 func RecordData(outDir, name string, req []byte, rsp []byte, desc string, db []string) (string, error) {
@@ -120,7 +120,7 @@ func RecordData(outDir, name string, req []byte, rsp []byte, desc string, db []s
 
 	td := TestItem{
 		DB:    data,
-		Flags: []string{"-regression_run_type=2"},
+		Flags: []string{"-gorr_run_type=2"},
 		TestCases: []TestCase{
 			TestCase{
 				Req:  f1,
@@ -131,7 +131,7 @@ func RecordData(outDir, name string, req []byte, rsp []byte, desc string, db []s
 	}
 
 	if len(data) > 0 {
-		mainDb := fmt.Sprintf("-regression_db_file=%s", data[0])
+		mainDb := fmt.Sprintf("-gorr_db_file=%s", data[0])
 		td.Flags = append(td.Flags, mainDb)
 	}
 

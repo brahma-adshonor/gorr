@@ -1,4 +1,4 @@
-package regression
+package gorr
 
 import (
 	"context"
@@ -171,7 +171,7 @@ func setupRedisHook(t *testing.T) {
 	GlobalMgr.SetStorage(NewMapStorage(100))
 
 	GlobalMgr.SetNotify(func(t string, key string, value []byte) {
-		fmt.Printf("regression event, type:%s, key(%d):%s, value:%s", t, len(key), key, string(value))
+		fmt.Printf("gorr event, type:%s, key(%d):%s, value:%s", t, len(key), key, string(value))
 		fmt.Printf("\n")
 	})
 

@@ -1,4 +1,4 @@
-package regression
+package gorr
 
 import (
 	"errors"
@@ -14,7 +14,7 @@ import (
 
 var (
 	bolt_db_big_value_thresh    = flag.Int("bolt_db_big_value_thresh", 1024*1024, "value size than threshold will be store to a single file")
-	regression_bolt_bucket_name = flag.String("regression_bolt_bucket_name", "global_bucket", "bucket name used by regression in bolt db")
+	gorr_bolt_bucket_name = flag.String("gorr_bolt_bucket_name", "global_bucket", "bucket name used by gorr in bolt db")
 )
 
 type MapStorage struct {
@@ -72,7 +72,7 @@ func NewBoltStorage(path string) (*BoltStorage, error) {
 	}
 
 	err = db.Update(func(tx *bolt.Tx) error {
-		_, err := tx.CreateBucket([]byte(*regression_bolt_bucket_name))
+		_, err := tx.CreateBucket([]byte(*gorr_bolt_bucket_name))
 		if err == bolt.ErrBucketExists {
 			return nil
 		}
@@ -84,7 +84,7 @@ func NewBoltStorage(path string) (*BoltStorage, error) {
 }
 
 func genBigValueFileName() string {
-	prefix := "regression.file.db." + time.Now().Format("20060102150405")
+	prefix := "gorr.file.db." + time.Now().Format("20060102150405")
 
 	path := prefix
 	for i := 0; i < 32; i++ {
@@ -103,7 +103,7 @@ func (s *BoltStorage) Put(key string, value []byte) error {
 	defer s.mu.Unlock()
 
 	err := s.db.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(*regression_bolt_bucket_name))
+		b := tx.Bucket([]byte(*gorr_bolt_bucket_name))
 		value = append(value, byte('m'))
 
 		if len(value) > *bolt_db_big_value_thresh {
@@ -131,7 +131,7 @@ func (s *BoltStorage) Put(key string, value []byte) error {
 func (s *BoltStorage) GetBigValueFile(key string) (string, error) {
 	var ret []byte
 	err := s.db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(*regression_bolt_bucket_name))
+		b := tx.Bucket([]byte(*gorr_bolt_bucket_name))
 		ret = b.Get([]byte(key))
 		return nil
 	})
@@ -159,7 +159,7 @@ func (s *BoltStorage) Get(key string) ([]byte, error) {
 
 	var ret []byte
 	err := s.db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(*regression_bolt_bucket_name))
+		b := tx.Bucket([]byte(*gorr_bolt_bucket_name))
 		ret = b.Get([]byte(key))
 		return nil
 	})

@@ -1,4 +1,4 @@
-package regression
+package gorr
 
 import (
 	"context"
@@ -57,7 +57,7 @@ func setupHook(t *testing.T) {
 	assert.Nil(t, err2)
 
 	GlobalMgr.SetNotify(func(t string, key string, value []byte) {
-		fmt.Printf("regression event, type:%s, key:%s, value:", t, key)
+		fmt.Printf("gorr event, type:%s, key:%s, value:", t, key)
 		for _, b := range value {
 			fmt.Printf("%x ", b)
 		}
