@@ -1,0 +1,25 @@
+{
+    "db": [
+        "input/global1.db"
+    ],
+    "input": [
+        {
+            "src": "input/pos1.data",
+            "dst": "/var/data/conf/ad_pos.done"
+        }
+    ],
+    "cases": [
+        {
+            "desc": "info1",
+            "runner": "access_client1",
+            "req": "input/access_req1.json",
+            "rsp": "output/access_rsp1.dat"
+        },
+        {
+            "desc": "info2",
+            "runner": "mixer_client1",
+            "req": "input/access_req2.json",
+            "rsp": "output/access_rsp2.dat"
+        }
+    ]
+}

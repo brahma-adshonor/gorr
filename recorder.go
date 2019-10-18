@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
 	"io/ioutil"
 	"net/http"
@@ -18,10 +19,12 @@ type MoveData struct {
 }
 
 type TestCase struct {
-	Req    string `json:"req"`
-	Rsp    string `json:"rsp"`
-	Desc   string `json:"Desc"`
-	Runner string `json:"runner"`
+	Req     string `json:"req"`
+	Rsp     string `json:"rsp"`
+	ReqType int    `json:"ReqType"`
+	RspType int    `json:"RspType"`
+	Desc    string `json:"Desc"`
+	Runner  string `json:"runner"`
 }
 
 type TestItem struct {
@@ -30,6 +33,13 @@ type TestItem struct {
 	Input     []MoveData `json:"input,omitempty"`
 	TestCases []TestCase `json:"cases"`
 }
+
+const (
+	RecorderDataTypeUnknown  = 23
+	RecorderDataTypeJson     = 24
+	RecorderDataTypePbText   = 25
+	RecorderDataTypePbBinary = 26
+)
 
 func RecordHttp(desc string, req *http.Request, rsp *http.Response, db []string) (string, error) {
 	if req.Body == nil || rsp.Body == nil {
@@ -51,7 +61,7 @@ func RecordHttp(desc string, req *http.Request, rsp *http.Response, db []string)
 	rsp.Body = ioutil.NopCloser(bytes.NewBuffer(rspBody))
 
 	outDir := createOutputDir("case")
-	return RecordData(outDir, "", reqBody, rspBody, desc, db)
+	return RecordData(outDir, "", reqBody, RecorderDataTypeJson, rspBody, RecorderDataTypeJson, desc, db)
 }
 
 func RecordGrpc(desc string, req proto.Message, rsp proto.Message, db []string) (string, error) {
@@ -61,9 +71,14 @@ func RecordGrpc(desc string, req proto.Message, rsp proto.Message, db []string) 
 	}
 
 	outDir := createOutputDir("case")
-	d2 := proto.MarshalTextString(rsp)
 
-	return RecordData(outDir, "", d1, []byte(d2), desc, db)
+	m := jsonpb.Marshaler{}
+	d2, err2 := m.MarshalToString(rsp)
+	if err2 != nil {
+		return "", fmt.Errorf("marshal grpc response failed, err:%s", err2.Error())
+	}
+
+	return RecordData(outDir, "", d1, RecorderDataTypePbBinary, []byte(d2), RecorderDataTypeJson, desc, db)
 }
 
 func genUniqueFileName(dir, prefix, suggest string) string {
@@ -84,7 +99,7 @@ func genUniqueFileName(dir, prefix, suggest string) string {
 	panic("can not create gorr output dir")
 }
 
-func RecordData(outDir, name string, req []byte, rsp []byte, desc string, db []string) (string, error) {
+func RecordData(outDir, name string, req []byte, t1 int, rsp []byte, t2 int, desc string, db []string) (string, error) {
 	f1 := genUniqueFileName(outDir, "reg_req", name)
 	f2 := genUniqueFileName(outDir, "reg_rsp", name)
 
@@ -102,7 +117,7 @@ func RecordData(outDir, name string, req []byte, rsp []byte, desc string, db []s
 		return "", err
 	}
 
-	var data []string
+	data := make([]string, 0, len(db))
 	for _, f := range db {
 		idx := strings.LastIndex(f, "/")
 		if idx == -1 {
@@ -123,9 +138,11 @@ func RecordData(outDir, name string, req []byte, rsp []byte, desc string, db []s
 		Flags: []string{"-gorr_run_type=2"},
 		TestCases: []TestCase{
 			TestCase{
-				Req:  f1,
-				Rsp:  f2,
-				Desc: desc,
+				Req:     f1,
+				Rsp:     f2,
+				ReqType: t1,
+				RspType: t2,
+				Desc:    desc,
 			},
 		},
 	}

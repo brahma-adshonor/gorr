@@ -2,7 +2,7 @@ package gorr
 
 import (
 	"encoding/json"
-	"github.com/golang/protobuf/proto"
+	"github.com/golang/protobuf/jsonpb"
 	"github.com/stretchr/testify/assert"
 	"io/ioutil"
 	"net/http"
@@ -56,7 +56,7 @@ func TestRecordHttp(t *testing.T) {
 
 	assert.Equal(t, "-gorr_run_type=2", ti.Flags[0])
 	assert.Equal(t, []string{"reg_db1.db", "reg_db2.db"}, ti.DB)
-	assert.Equal(t, TestCase{Req: "reg_req_.dat", Rsp: "reg_rsp_.dat", Desc: "miliao_http_test"}, ti.TestCases[0])
+	assert.Equal(t, TestCase{Req: "reg_req_.dat", Rsp: "reg_rsp_.dat", Desc: "miliao_http_test", ReqType: RecorderDataTypeJson, RspType: RecorderDataTypeJson}, ti.TestCases[0])
 
 	os.RemoveAll(out)
 }
@@ -99,7 +99,7 @@ func TestRecordGrpc(t *testing.T) {
 	rsp2 := &GrpcHookResponse{}
 
 	err1 = json.Unmarshal(reqData, req2)
-	err2 = proto.UnmarshalText(string(rspData), rsp2)
+	err2 = jsonpb.UnmarshalString(string(rspData), rsp2)
 	assert.Nil(t, err1)
 	assert.Nil(t, err2)
 

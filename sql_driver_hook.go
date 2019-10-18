@@ -251,10 +251,10 @@ func (rd *sqlRowData) MarshalJSON() ([]byte, error) {
 		return nil, fmt.Errorf("marshalling FieldInfo failed for sqlRowData")
 	}
 
-	var rs [][]string
-	for i, _ := range rd.Rows {
-		var vs []string
-		for j, _ := range rd.Rows[i] {
+	rs := make([][]string, 0, len(rd.Rows))
+	for i := range rd.Rows {
+		vs := make([]string, 0, len(rd.Rows[i]))
+		for j := range rd.Rows[i] {
 			t, err := json.Marshal(rd.FieldInfo[j].ScanType)
 			if err != nil {
 				return nil, fmt.Errorf("marshaling scanType of %dth field failed, err:%s", j, err.Error())
@@ -495,8 +495,8 @@ func (stmt *sqlHookStmt) ColumnConverter(idx int) driver.ValueConverter {
 }
 
 func (stmt *sqlHookStmt) QueryContext(ctx context.Context, args []driver.NamedValue) (driver.Rows, error) {
-	var arr []driver.Value
-	var values []driver.Value
+	arr := make([]driver.Value, 0, len(args))
+	values := make([]driver.Value, 0, len(args))
 
 	for i := range args {
 		arr = append(arr, args[i])
@@ -519,8 +519,8 @@ func (stmt *sqlHookStmt) QueryContext(ctx context.Context, args []driver.NamedVa
 }
 
 func (stmt *sqlHookStmt) ExecContext(ctx context.Context, args []driver.NamedValue) (driver.Result, error) {
-	var arr []driver.Value
-	var values []driver.Value
+	arr := make([]driver.Value, 0, len(args))
+	values := make([]driver.Value, 0, len(args))
 
 	for i := range args {
 		arr = append(arr, args[i])
@@ -590,8 +590,8 @@ func (conn *sqlHookConn) Exec(query string, args []driver.Value) (driver.Result,
 }
 
 func (conn *sqlHookConn) QueryContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
-	var arr []driver.Value
-	var values []driver.Value
+	arr := make([]driver.Value, 0, len(args))
+	values := make([]driver.Value, 0, len(args))
 
 	for i := range args {
 		arr = append(arr, args[i])
@@ -614,8 +614,8 @@ func (conn *sqlHookConn) QueryContext(ctx context.Context, query string, args []
 }
 
 func (conn *sqlHookConn) ExecContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
-	var arr []driver.Value
-	var values []driver.Value
+	arr := make([]driver.Value, 0, len(args))
+	values := make([]driver.Value, 0, len(args))
 
 	for i := range args {
 		arr = append(arr, args[i])

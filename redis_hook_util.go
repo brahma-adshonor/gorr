@@ -36,7 +36,9 @@ func buildRedisClusterClientId(c *redis.ClusterClient) string {
 }
 
 func buildRedisCmdKey(id string, cmd redis.Cmder) string {
-	var ss []string
+	args := cmd.Args()
+	ss := make([]string, 0, len(args)+1)
+
 	switch cmd.(type) {
 	case *redis.StringCmd:
 		ss = append(ss, "StringCmd@")
@@ -55,7 +57,7 @@ func buildRedisCmdKey(id string, cmd redis.Cmder) string {
 		ss = append(ss, cmd.Name())
 	}
 
-	for _, arg := range cmd.Args() {
+	for _, arg := range args {
 		ss = append(ss, fmt.Sprint(arg))
 	}
 

@@ -10,3 +10,10 @@ go test -gcflags=all='-l' -o t1 -cover
 
 cd tool
 go test -gcflags=all='-l' -o t2 -cover 
+
+cd diff
+go test
+
+cd ../dbtool
+go test
+
