@@ -1,7 +1,7 @@
 package main
 
 import (
-	"adshonor/common/util"
+	"gorr/util"
 	"encoding/json"
 	"flag"
 	"fmt"
