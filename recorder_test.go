@@ -30,7 +30,8 @@ func TestRecordHttp(t *testing.T) {
 	ioutil.WriteFile(db2, []byte("ddddd"), 0644)
 
 	var out string
-	out, err = RecordHttp("miliao_http_test", req, rsp, []string{db1, db2})
+	outDir := createOutputDir("cases")
+	out, err = RecordHttp(outDir, "miliao_http_test", req, rsp, []string{db1, db2})
 	assert.Nil(t, err)
 
 	reqData, err1 := ioutil.ReadFile(out + "/reg_req_.dat")
@@ -82,7 +83,8 @@ func TestRecordGrpc(t *testing.T) {
 	ioutil.WriteFile(db2, []byte("ddddd"), 0644)
 
 	var out string
-	out, err := RecordGrpc("miliao_test_grpc_record", req, rsp, []string{db1, db2})
+	outDir := createOutputDir("cases")
+	out, err := RecordGrpc(outDir, "miliao_test_grpc_record", req, rsp, []string{db1, db2})
 
 	assert.Nil(t, err)
 

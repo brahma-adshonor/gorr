@@ -53,6 +53,7 @@ var (
 	RegressionFlagFile    = flag.String("regression_flag", "", "path to flag file for setting regression flags")
 	TestCaseConfigPattern = flag.String("test_case_config_pattern", "reg_config.json", "test case config file name")
 	diffTool              = flag.String("diffTool", "./rdiff", "tool to perform diff")
+	updateOldCase         = flag.Int("update_case_from_diff", 0, "whether to update test cases when diff presents")
 )
 
 func ScanTestData(path string) ([]*TestItem, error) {
@@ -189,6 +190,10 @@ func RunTestCase(differ, start_cmd, stop_cmd, addr string, store_dir, regression
 			fmt.Printf("\033[31m@@@@@%dth test case failed@@@@@\033[m, name:%s, err:%v, cmd:%s\n", i, v.Desc, err, cmd)
 			m := fmt.Sprintf("diff failed, msg:%s", string(output))
 			all_err = append(all_err, fmt.Errorf("\n\033[31m@@@@@@ %dth test case FAILED@@@@@@\033[m, name:%s, diffcmd:%s, detail:\n%s", i, v.Desc, diffCmd, m))
+			if *updateOldCase > 0 {
+				err = util.CopyFile(res, v.Rsp)
+				fmt.Printf("update test case(%d) from diff, err:%s\n", i, err)
+			}
 			continue
 		}
 

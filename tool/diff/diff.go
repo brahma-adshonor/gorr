@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	//"github.com/golang/protobuf/jsonpb"
+	//"github.com/golang/protobuf/proto"
+	//"github.com/golang/protobuf/ptypes/struct"
 	"github.com/pmezard/go-difflib/difflib"
 	"io/ioutil"
 	"os"
@@ -72,18 +75,48 @@ func doDiff(dt int, ef, af string) (string, error) {
 	}
 
 	if len(diff) > 0 {
-		return fmt.Sprintf("diff:\n%s\n", diff), nil
+		return fmt.Sprintf("diff output:\n%s\n", diff), nil
 	}
 
 	return "", nil
 }
 
 func diffProtobuf(ep, at []byte) (string, error) {
-	// TODO
-	return diffJSON(ep, at)
+	// NOT working
+	panic("pb binary is not supported")
 }
 
 func diffJSON(ep, at []byte) (string, error) {
+	var ep1, at1 map[string]interface{}
+
+	err1 := json.Unmarshal(ep, &ep1)
+	if err1 != nil {
+		return "", fmt.Errorf("unmarshal expect data failed, err:%s", err1)
+	}
+
+	err2 := json.Unmarshal(at, &at1)
+	if err2 != nil {
+		return "", fmt.Errorf("unmarshal actual data failed, err:%s", err2)
+	}
+
+	d, err := diffAny("", ep1, at1)
+	if err != nil {
+		return "", fmt.Errorf("diff json map failed, err:%s", err)
+	}
+
+	if d == nil {
+		return "", nil
+	}
+
+	diff := d.String(2)
+	if len(diff) == 0 {
+		return "", nil
+	}
+
+	return "--- Expected\n+++ Actual\n@@@@@@@@@@@@@@@@@\n" + diff, nil
+}
+
+func diffJSONText(ep, at []byte) (string, error) {
 	var ep1, at1 map[string]interface{}
 
 	err1 := json.Unmarshal(ep, &ep1)
@@ -111,7 +144,6 @@ func diffJSON(ep, at []byte) (string, error) {
 	var err error
 	var diff string
 	if !bytes.Equal(d1, d2) {
-
 		diff, err = difflib.GetUnifiedDiffString(difflib.UnifiedDiff{
 			A:        difflib.SplitLines(string(d1)),
 			B:        difflib.SplitLines(string(d2)),

@@ -71,17 +71,20 @@ func TestJSONDiff(t *testing.T) {
 	f1 := "./d1.txt"
 	err = ioutil.WriteFile(f1, d1, 0666)
 	assert.Nil(t, err)
-	defer os.Remove(f1)
 
 	f2 := "./d2.txt"
 	err = ioutil.WriteFile(f2, d2, 0666)
 	assert.Nil(t, err)
-	defer os.Remove(f2)
 
 	f3 := "./d3.txt"
 	err = ioutil.WriteFile(f3, d3, 0666)
 	assert.Nil(t, err)
-	defer os.Remove(f3)
+
+	defer func() {
+		os.Remove(f1)
+		os.Remove(f2)
+		os.Remove(f3)
+	}()
 
 	var diff string
 	diff, err = doDiff(recorderDataTypeJSON, f1, f2)
@@ -92,5 +95,62 @@ func TestJSONDiff(t *testing.T) {
 	assert.Nil(t, err)
 	assert.NotEqual(t, "", diff)
 
-	fmt.Printf("diff from doDiff:\n%s\n", diff)
+	fmt.Printf("json diff from doDiff:\n%s\n", diff)
+}
+
+type dt struct {
+	iv  int
+	sv  string
+	itv []interface{}
+	mtv map[string]interface{}
+}
+
+func TestDiffMapStruct(t *testing.T) {
+	d1 := map[string]interface{}{
+		"iv":  23,
+		"sv":  "miliao",
+		"itv": []interface{}{42, "mm", map[string]interface{}{"kv1": 111, "kv2": "vvvv"}},
+		"mtv": map[string]interface{}{"mv1": 2222, "mv2": "vvv2", "sl": []interface{}{"s1", 5555}},
+	}
+
+	d2 := map[string]interface{}{
+		"iv":  234,
+		"itv": []interface{}{432, map[string]interface{}{"kv1": 111, "kv2": "vvvv"}},
+		"mtv": map[string]interface{}{"mv1": 2222, "mv2": "vvv2", "sl": []interface{}{"s1", 5555}},
+	}
+
+	d3 := map[string]interface{}{
+		"iv":  234,
+		"itv": []interface{}{432, map[string]interface{}{"kv1": 111, "kv2": "vvvv"}},
+		"mtv": map[string]interface{}{"mv1": 2222, "mv2": "vvv2", "sl": []interface{}{"s1", 5555}},
+	}
+
+	n, err := diffSingle(1, "", d1)
+	assert.Nil(t, err)
+
+	diff := n.String(2)
+	assert.NotEqual(t, "", diff)
+
+	fmt.Printf("diff of single:\n%s\n", diff)
+
+	n, err = diffMap("", d1, d2)
+	assert.Nil(t, err)
+
+	diff = n.String(2)
+	assert.NotEqual(t, "", diff)
+	fmt.Printf("diff of map:\n%s\n", diff)
+
+	n2, err2 := diffAny("", d1, d2)
+	assert.Nil(t, err2)
+
+	diff2 := n2.String(2)
+	assert.NotEqual(t, "", diff2)
+	fmt.Printf("diff of any:\n%s\n", diff2)
+
+	assert.Equal(t, diff, diff2)
+
+	n3, err3 := diffAny("", d2, d3)
+	assert.Nil(t, err3)
+
+	assert.Nil(t, n3)
 }

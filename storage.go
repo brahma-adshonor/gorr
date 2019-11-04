@@ -71,7 +71,7 @@ func NewBoltStorage(path string) (*BoltStorage, error) {
 		return nil, err
 	}
 
-	err = db.Update(func(tx *bolt.Tx) error {
+	_ = db.Update(func(tx *bolt.Tx) error {
 		_, err := tx.CreateBucket([]byte(*gorr_bolt_bucket_name))
 		if err == bolt.ErrBucketExists {
 			return nil

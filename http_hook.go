@@ -46,7 +46,7 @@ func saveResponse(key string, r *http.Response) error {
 
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		return errors.New(fmt.Sprintf("http hook read body failed, err:%s", err.Error()))
+		return fmt.Errorf("http hook read body failed, err:%s", err.Error())
 	}
 	r.Body.Close()
 
@@ -97,7 +97,7 @@ func doHttp(c *http.Client, req *http.Request) (*http.Response, error) {
 	method := req.Method
 
 	if req.Body != nil {
-		data, err = ioutil.ReadAll(req.Body)
+		data, _ = ioutil.ReadAll(req.Body)
 		req.Body.Close()
 	}
 

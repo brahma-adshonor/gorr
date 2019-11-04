@@ -62,7 +62,13 @@ func InitRegressionEngine() int {
 	}
 
 	enableRegressionEngine(*RegressionRunType)
-	GlobalMgr.SetBoltStorage(*RegressionDbDirectory + "/" + *RegressionDbFile)
+	dbFile := *RegressionDbDirectory + "/" + *RegressionDbFile
+
+	if *RegressionRunType == 1 {
+		os.Remove(dbFile)
+	}
+
+	GlobalMgr.SetBoltStorage(dbFile)
 
 	return *RegressionRunType
 }

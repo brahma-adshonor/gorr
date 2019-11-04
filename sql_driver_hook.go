@@ -304,9 +304,9 @@ func (rd *sqlRowData) UnmarshalJSON(data []byte) error {
 		return fmt.Errorf("unmarshal sqlRowData.Rows failed, err:%s", err.Error())
 	}
 
-	for i, _ := range rs {
+	for i := range rs {
 		var row []driver.Value
-		for j, _ := range rs[i] {
+		for j := range rs[i] {
 			var fs [2][]byte
 			err = json.Unmarshal([]byte(rs[i][j]), &fs)
 			if err != nil {

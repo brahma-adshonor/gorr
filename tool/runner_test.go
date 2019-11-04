@@ -69,7 +69,7 @@ func TestRunCase(t *testing.T) {
 func TestMain(m *testing.M) {
 	// call flag.Parse() here if TestMain uses flags
 
-	_, err := exec.Command("/bin/sh", "-c", "go build -o rdiff ./diff/diff.go").Output()
+	_, err := exec.Command("/bin/sh", "-c", "go build -o rdiff ./diff/diff.go ./diff/diffValue.go").Output()
 	if err != nil {
 		fmt.Printf("build diff tool failed\n")
 		os.Exit(23)

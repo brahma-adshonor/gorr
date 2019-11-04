@@ -41,7 +41,7 @@ const (
 	RecorderDataTypePbBinary = 26
 )
 
-func RecordHttp(desc string, req *http.Request, rsp *http.Response, db []string) (string, error) {
+func RecordHttp(outDir, desc string, req *http.Request, rsp *http.Response, db []string) (string, error) {
 	if req.Body == nil || rsp.Body == nil {
 		return "", fmt.Errorf("invalid http data, req/rsp must contain body")
 	}
@@ -60,17 +60,17 @@ func RecordHttp(desc string, req *http.Request, rsp *http.Response, db []string)
 	rsp.Body.Close()
 	rsp.Body = ioutil.NopCloser(bytes.NewBuffer(rspBody))
 
-	outDir := createOutputDir("case")
+	//outDir := createOutputDir("case")
 	return RecordData(outDir, "", reqBody, RecorderDataTypeJson, rspBody, RecorderDataTypeJson, desc, db)
 }
 
-func RecordGrpc(desc string, req proto.Message, rsp proto.Message, db []string) (string, error) {
+func RecordGrpc(outDir, desc string, req proto.Message, rsp proto.Message, db []string) (string, error) {
 	d1, err1 := json.Marshal(req)
 	if err1 != nil {
 		return "", fmt.Errorf("marshal grpc request failed, err:%s", err1.Error())
 	}
 
-	outDir := createOutputDir("case")
+	//outDir := createOutputDir("case")
 
 	m := jsonpb.Marshaler{}
 	d2, err2 := m.MarshalToString(rsp)
