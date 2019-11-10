@@ -2,6 +2,7 @@ package gorr
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/stretchr/testify/assert"
 	"io/ioutil"
@@ -9,9 +10,15 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestRecordHttp(t *testing.T) {
+	curTm := time.Now()
+	SetUnixTime(curTm)
+	SetTimeIncDelta(0)
+	HookTimeNow()
+
 	*RegressionOutputDir = "/tmp"
 
 	body1 := "miliao-http-test-data-set"
@@ -52,10 +59,12 @@ func TestRecordHttp(t *testing.T) {
 	assert.Nil(t, err)
 
 	assert.Equal(t, 2, len(ti.DB))
-	assert.Equal(t, 2, len(ti.Flags))
+	assert.Equal(t, 3, len(ti.Flags))
 	assert.Equal(t, 1, len(ti.TestCases))
 
 	assert.Equal(t, "-gorr_run_type=2", ti.Flags[0])
+	assert.Equal(t, fmt.Sprintf("-server_time=%s", curTm.Format(time.RFC3339)), ti.Flags[1])
+
 	assert.Equal(t, []string{"reg_db1.db", "reg_db2.db"}, ti.DB)
 	assert.Equal(t, TestCase{Req: "reg_req_.dat", Rsp: "reg_rsp_.dat", Desc: "miliao_http_test", ReqType: RecorderDataTypeJson, RspType: RecorderDataTypeJson}, ti.TestCases[0])
 

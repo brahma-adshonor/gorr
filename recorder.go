@@ -1,16 +1,24 @@
 package gorr
 
 import (
-	"gorr/util"
 	"bytes"
 	"encoding/json"
+	"flag"
 	"fmt"
+	"gorr/util"
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
 	"io/ioutil"
 	"net/http"
 	"os"
 	"strings"
+	"time"
+)
+
+var (
+	tsChan          = make(chan string, 128)
+	s3CaseDir       = flag.String("case_store_dir", "", "s3 path to store test case")
+	testCaseHandler = flag.String("test_case_handler_tool", "", "tool to handle test case")
 )
 
 type MoveData struct {
@@ -24,6 +32,7 @@ type TestCase struct {
 	ReqType int    `json:"ReqType"`
 	RspType int    `json:"RspType"`
 	Desc    string `json:"Desc"`
+	URI     string `json:"Uri"`
 	Runner  string `json:"runner"`
 }
 
@@ -32,6 +41,7 @@ type TestItem struct {
 	Flags     []string   `json:"flags,omitempty"`
 	Input     []MoveData `json:"input,omitempty"`
 	TestCases []TestCase `json:"cases"`
+	Version   int        `json:"version"`
 }
 
 const (
@@ -61,7 +71,7 @@ func RecordHttp(outDir, desc string, req *http.Request, rsp *http.Response, db [
 	rsp.Body = ioutil.NopCloser(bytes.NewBuffer(rspBody))
 
 	//outDir := createOutputDir("case")
-	return RecordData(outDir, "", reqBody, RecorderDataTypeJson, rspBody, RecorderDataTypeJson, desc, db)
+	return RecordData("", outDir, "", reqBody, RecorderDataTypeJson, rspBody, RecorderDataTypeJson, desc, db)
 }
 
 func RecordGrpc(outDir, desc string, req proto.Message, rsp proto.Message, db []string) (string, error) {
@@ -78,7 +88,7 @@ func RecordGrpc(outDir, desc string, req proto.Message, rsp proto.Message, db []
 		return "", fmt.Errorf("marshal grpc response failed, err:%s", err2.Error())
 	}
 
-	return RecordData(outDir, "", d1, RecorderDataTypePbBinary, []byte(d2), RecorderDataTypeJson, desc, db)
+	return RecordData("", outDir, "", d1, RecorderDataTypePbBinary, []byte(d2), RecorderDataTypeJson, desc, db)
 }
 
 func genUniqueFileName(dir, prefix, suggest string) string {
@@ -99,7 +109,7 @@ func genUniqueFileName(dir, prefix, suggest string) string {
 	panic("can not create gorr output dir")
 }
 
-func RecordData(outDir, name string, req []byte, t1 int, rsp []byte, t2 int, desc string, db []string) (string, error) {
+func RecordData(uri, outDir, name string, req []byte, t1 int, rsp []byte, t2 int, desc string, db []string) (string, error) {
 	f1 := genUniqueFileName(outDir, "reg_req", name)
 	f2 := genUniqueFileName(outDir, "reg_rsp", name)
 
@@ -133,13 +143,17 @@ func RecordData(outDir, name string, req []byte, t1 int, rsp []byte, t2 int, des
 		data = append(data, name)
 	}
 
+	ts := time.Now().Format(time.RFC3339)
+
 	td := TestItem{
-		DB:    data,
-		Flags: []string{"-gorr_run_type=2"},
+		DB:      data,
+		Version: 1,
+		Flags:   []string{"-gorr_run_type=2", fmt.Sprintf("-server_time=%s", ts)},
 		TestCases: []TestCase{
 			TestCase{
 				Req:     f1,
 				Rsp:     f2,
+				URI:     uri,
 				ReqType: t1,
 				RspType: t2,
 				Desc:    desc,
@@ -172,5 +186,27 @@ func RecordData(outDir, name string, req []byte, t1 int, rsp []byte, t2 int, des
 		return "", fmt.Errorf("writing config file failed, err:%s", err.Error())
 	}
 
+	if len(*testCaseHandler) > 0 && len(*s3CaseDir) > 0 {
+		tsChan <- outDir
+	}
+
 	return outDir, nil
+}
+
+func RunTestCaseUploader() {
+	if len(*testCaseHandler) > 0 && len(*s3CaseDir) > 0 {
+		go doUpload()
+	}
+}
+
+func doUpload() {
+	for {
+		d := <-tsChan
+		cmd := fmt.Sprintf("S3_CASE_DIR=%s LOCAL_CASE_DIR=%s %s", *s3CaseDir, d, *testCaseHandler)
+
+		out, err := util.RunCmd(cmd)
+
+		m := fmt.Sprintf("output:%s, err:%s", out, err)
+		GlobalMgr.notifier("upload test case done", cmd, []byte(m))
+	}
 }

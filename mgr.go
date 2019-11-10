@@ -50,10 +50,11 @@ type RegressionMgr struct {
 var (
 	GlobalMgr *RegressionMgr
 
-	RegressionRunType     = flag.Int("gorr_run_type", 0, "turn on/off gorr(0 for off, 1 for record, 2 for replay)")
-	RegressionDbFile      = flag.String("gorr_db_file", "gorr.db", "file name gorr db")
-	RegressionDbDirectory = flag.String("gorr_db_dir", "/var/data/gorr", "directory to get gorr db")
-	RegressionOutputDir   = flag.String("gorr_record_output_dir", "/var/data/conf/gorr", "dir to store auto generated test cases")
+	RegressionRunType               = flag.Int("gorr_run_type", 0, "turn on/off gorr(0 for off, 1 for record, 2 for replay)")
+	RegressionDbFile                = flag.String("gorr_db_file", "gorr.db", "file name gorr db")
+	RegressionDbDirectory           = flag.String("gorr_db_dir", "/var/data/gorr", "directory to get gorr db")
+	RegressionOutputDir             = flag.String("gorr_record_output_dir", "/var/data/conf/gorr", "dir to store auto generated test cases")
+	RegressionOutDirRefreshInterval = flag.Int("gorr_output_dir_refresh_interval", 7200, "refresh interval in seconds")
 )
 
 func InitRegressionEngine() int {
@@ -64,11 +65,21 @@ func InitRegressionEngine() int {
 	enableRegressionEngine(*RegressionRunType)
 	dbFile := *RegressionDbDirectory + "/" + *RegressionDbFile
 
-	if *RegressionRunType == 1 {
+	if *RegressionRunType == RegressionRecord {
 		os.Remove(dbFile)
 	}
 
+	RunTestCaseUploader()
 	GlobalMgr.SetBoltStorage(dbFile)
+
+	go func() {
+		for {
+			if *RegressionRunType == RegressionRecord {
+				GlobalMgr.ResetTestSuitDir()
+			}
+			time.Sleep(time.Duration(*RegressionOutDirRefreshInterval) * time.Second)
+		}
+	}()
 
 	return *RegressionRunType
 }
@@ -125,21 +136,24 @@ func (r *RegressionMgr) SetBoltStorage(path string) error {
 		return err
 	}
 
-	dir := createOutputDir("ts")
-	if len(dir) == 0 {
-		return fmt.Errorf("create test suit output dir failed")
-	}
-
 	origin := r.store
-
 	r.store = db
-	r.curTestSuitDir = dir
 
 	if origin != nil {
 		origin.Close()
 	}
 
 	return nil
+}
+
+func (r *RegressionMgr) ResetTestSuitDir() string {
+	dir := createOutputDir("ts")
+	if len(dir) == 0 {
+		return ""
+	}
+
+	r.curTestSuitDir = dir
+	return dir
 }
 
 func (r *RegressionMgr) GetCurrentTestSuitDir() string {

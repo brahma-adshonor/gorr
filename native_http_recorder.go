@@ -103,6 +103,12 @@ func (h *httpRecorder) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		defer reader.Close()
 	}
 
+	if wr.data.Header.Get("HttpResponseType") == "Failure" {
+		v := fmt.Sprintf("pattern:%s, name:%s", h.pattern, dname)
+		GlobalMgr.notifier("native http recorder", "ignoring error response", []byte(v))
+		return
+	}
+
 	h.handler(h.pattern, dname, req, &wr.data)
 }
 

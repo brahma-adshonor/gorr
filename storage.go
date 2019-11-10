@@ -50,7 +50,6 @@ func (s *MapStorage) Get(key string) ([]byte, error) {
 func (s *MapStorage) Clear() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-
 	s.m = make(map[string][]byte)
 }
 
