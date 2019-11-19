@@ -146,7 +146,7 @@ func RecordData(uri, outDir, name string, req []byte, t1 int, rsp []byte, t2 int
 	}
 
 	data := make([]string, 0, len(files))
-	for _, f := range db {
+	for _, f := range files {
 		idx := strings.LastIndex(f, "/")
 		if idx == -1 {
 			return "", fmt.Errorf("invalid db file path, file:%s", f)
