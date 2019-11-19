@@ -109,7 +109,14 @@ func (h *httpRecorder) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.handler(h.pattern, dname, req, &wr.data)
+	GlobalMgr.notifier("native http recorder", "recording http done", []byte(r.URL.Path+"@@"+r.URL.RawQuery))
+
+	p := h.pattern
+	if len(r.URL.RawQuery) > 0 {
+		p = p + "?" + r.URL.RawQuery
+	}
+
+	h.handler(p, dname, req, &wr.data)
 }
 
 func httpHandleHook(s *http.ServeMux, pattern string, handler http.Handler) {

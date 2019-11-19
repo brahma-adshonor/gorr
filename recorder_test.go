@@ -41,8 +41,8 @@ func TestRecordHttp(t *testing.T) {
 	out, err = RecordHttp(outDir, "miliao_http_test", req, rsp, []string{db1, db2})
 	assert.Nil(t, err)
 
-	reqData, err1 := ioutil.ReadFile(out + "/reg_req_.dat")
-	rspData, err2 := ioutil.ReadFile(out + "/reg_rsp_.dat")
+	reqData, err1 := ioutil.ReadFile(out + "/reg_req_http.dat")
+	rspData, err2 := ioutil.ReadFile(out + "/reg_rsp_http.dat")
 
 	assert.Nil(t, err1)
 	assert.Nil(t, err2)
@@ -66,7 +66,7 @@ func TestRecordHttp(t *testing.T) {
 	assert.Equal(t, fmt.Sprintf("-server_time=%s", curTm.Format(time.RFC3339)), ti.Flags[1])
 
 	assert.Equal(t, []string{"reg_db1.db", "reg_db2.db"}, ti.DB)
-	assert.Equal(t, TestCase{Req: "reg_req_.dat", Rsp: "reg_rsp_.dat", Desc: "miliao_http_test", ReqType: RecorderDataTypeJson, RspType: RecorderDataTypeJson}, ti.TestCases[0])
+	assert.Equal(t, TestCase{Req: "reg_req_http.dat", Rsp: "reg_rsp_http.dat", Desc: "miliao_http_test", ReqType: RecorderDataTypeJson, RspType: RecorderDataTypeJson}, ti.TestCases[0])
 
 	os.RemoveAll(out)
 }
@@ -100,8 +100,8 @@ func TestRecordGrpc(t *testing.T) {
 	os.Remove(db1)
 	os.Remove(db2)
 
-	reqData, err1 := ioutil.ReadFile(out + "/reg_req_.dat")
-	rspData, err2 := ioutil.ReadFile(out + "/reg_rsp_.dat")
+	reqData, err1 := ioutil.ReadFile(out + "/reg_req_grpc.dat")
+	rspData, err2 := ioutil.ReadFile(out + "/reg_rsp_grpc.dat")
 
 	assert.Nil(t, err1)
 	assert.Nil(t, err2)

@@ -92,8 +92,10 @@ func grpcInvokeHook(cc *grpc.ClientConn, ctx context.Context, method string, arg
 			}
 
 			d, _ := json.Marshal(val)
-			err = GlobalMgr.StoreValue(key, d)
-			GlobalMgr.notifier("grpc recording error msg", key+"@@"+proto.MarshalTextString(req), []byte(err.Error()))
+			GlobalMgr.StoreValue(key, d)
+
+			reqMsg := proto.MarshalTextString(req)
+			GlobalMgr.notifier("grpc recording error msg", key+"@@"+reqMsg, []byte(err.Error()))
 		}
 
 		if err != nil {
@@ -134,7 +136,7 @@ func grpcInvokeHook(cc *grpc.ClientConn, ctx context.Context, method string, arg
 			if err != nil {
 				errMsg = fmt.Sprintf("err:err1(%s),err2(%s)", err1, err2)
 			}
-			GlobalMgr.notifier("grpc replaying", key+"@@"+proto.MarshalTextString(req), []byte(errMsg+",rsp:"+proto.MarshalTextString(rsp)))
+			GlobalMgr.notifier("grpc replaying", key+"@@reqData:"+proto.MarshalTextString(req), []byte(errMsg+",rsp:"+proto.MarshalTextString(rsp)))
 		} else {
 			err = errors.New("marshal request failed")
 		}

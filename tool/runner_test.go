@@ -52,9 +52,9 @@ func TestRunCase(t *testing.T) {
 		Flags: []string{"-h"},
 		Input: []MoveData{MoveData{Src: "testdata/dummy.rsp", Dst: "/tmp/dummy.rsp"}},
 		TestCases: []TestCase{
-			TestCase{Req: "dummy.req", Rsp: "testdata/dummy.rsp", Desc: "dummy test", Runner: "/bin/echo"},  // succ
-			TestCase{Req: "dummy.req", Rsp: "dummy2.rsp", Desc: "dummy test", Runner: "/bin/echo"}, // fail
-			TestCase{Req: "dummy.req", Rsp: "dummy.rsp", Desc: "dummy test", Runner: "/bin/echo2"}, // fail
+			TestCase{Req: "dummy.req", Rsp: "testdata/dummy.rsp", Desc: "dummy test", Runner: "/bin/echo"}, // succ
+			TestCase{Req: "dummy.req", Rsp: "dummy2.rsp", Desc: "dummy test", Runner: "/bin/echo"},         // fail
+			TestCase{Req: "dummy.req", Rsp: "dummy.rsp", Desc: "dummy test", Runner: "/bin/echo2"},         // fail
 		},
 	}
 

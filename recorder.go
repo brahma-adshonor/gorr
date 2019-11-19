@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -44,6 +45,11 @@ type TestItem struct {
 	Version   int        `json:"version"`
 }
 
+var (
+	gnum  int
+	glock sync.Mutex
+)
+
 const (
 	RecorderDataTypeUnknown  = 23
 	RecorderDataTypeJson     = 24
@@ -70,8 +76,7 @@ func RecordHttp(outDir, desc string, req *http.Request, rsp *http.Response, db [
 	rsp.Body.Close()
 	rsp.Body = ioutil.NopCloser(bytes.NewBuffer(rspBody))
 
-	//outDir := createOutputDir("case")
-	return RecordData("", outDir, "", reqBody, RecorderDataTypeJson, rspBody, RecorderDataTypeJson, desc, db)
+	return RecordData("", outDir, "http", reqBody, RecorderDataTypeJson, rspBody, RecorderDataTypeJson, desc, db)
 }
 
 func RecordGrpc(outDir, desc string, req proto.Message, rsp proto.Message, db []string) (string, error) {
@@ -80,15 +85,13 @@ func RecordGrpc(outDir, desc string, req proto.Message, rsp proto.Message, db []
 		return "", fmt.Errorf("marshal grpc request failed, err:%s", err1.Error())
 	}
 
-	//outDir := createOutputDir("case")
-
 	m := jsonpb.Marshaler{}
 	d2, err2 := m.MarshalToString(rsp)
 	if err2 != nil {
 		return "", fmt.Errorf("marshal grpc response failed, err:%s", err2.Error())
 	}
 
-	return RecordData("", outDir, "", d1, RecorderDataTypePbBinary, []byte(d2), RecorderDataTypeJson, desc, db)
+	return RecordData("", outDir, "grpc", d1, RecorderDataTypePbBinary, []byte(d2), RecorderDataTypeJson, desc, db)
 }
 
 func genUniqueFileName(dir, prefix, suggest string) string {
@@ -110,6 +113,21 @@ func genUniqueFileName(dir, prefix, suggest string) string {
 }
 
 func RecordData(uri, outDir, name string, req []byte, t1 int, rsp []byte, t2 int, desc string, db []string) (string, error) {
+	glock.Lock()
+	defer glock.Unlock()
+
+	gnum++
+	if gnum%100 == 0 {
+		GlobalMgr.ResetTestSuitDir()
+	}
+
+	if len(outDir) == 0 {
+		outDir = GlobalMgr.GetCurrentTestSuitDir()
+	}
+
+	files := GlobalMgr.GetDbFiles()
+	files = append(files, db...)
+
 	f1 := genUniqueFileName(outDir, "reg_req", name)
 	f2 := genUniqueFileName(outDir, "reg_rsp", name)
 
@@ -127,7 +145,7 @@ func RecordData(uri, outDir, name string, req []byte, t1 int, rsp []byte, t2 int
 		return "", err
 	}
 
-	data := make([]string, 0, len(db))
+	data := make([]string, 0, len(files))
 	for _, f := range db {
 		idx := strings.LastIndex(f, "/")
 		if idx == -1 {
