@@ -312,11 +312,12 @@ func main() {
 				_, err := util.RunCmd(*onTestSuitFailCmd)
 				fmt.Fprintf(os.Stderr, "\033[31m@@@@@@@ run error handler:%s, err:%s @@@@@@@@\033[m", *onTestSuitFailCmd, err)
 			}
-			if len(t.FailAgain) > 0 {
-				fa = append(fa, t.FailAgain...)
-			}
 		} else {
 			fmt.Printf("\033[32mdone running %dth test suit...\033[m\n\n", i)
+		}
+
+		if len(t.FailAgain) > 0 {
+			fa = append(fa, t.FailAgain...)
 		}
 
 		total += c
