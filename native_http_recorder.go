@@ -116,7 +116,12 @@ func (h *httpRecorder) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		p = p + "?" + r.URL.RawQuery
 	}
 
-	h.handler(p, dname, req, &wr.data)
+    if len(wr.data.Body) > 0 {
+            h.handler(p, dname, req, &wr.data)
+            GlobalMgr.notifier("native http recorder", "recording http done", []byte(r.URL.Path+"@@"+r.URL.RawQuery))
+    } else {
+            GlobalMgr.notifier("native http recorder", "empty reponse not recorded", []byte(r.URL.Path+"@@"+r.URL.RawQuery))
+    }
 }
 
 func httpHandleHook(s *http.ServeMux, pattern string, handler http.Handler) {
