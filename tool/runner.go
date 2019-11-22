@@ -216,7 +216,7 @@ func RunTestCase(differ, start_cmd, stop_cmd, addr string, store_dir, gorr_db, g
 
 		uri := ""
 		if len(v.URI) > 0 {
-			uri = " -uri=" + v.URI
+			uri = " -uri=\"" + v.URI + "\""
 		}
 
 		cmd = caseVer + " " + cmd
