@@ -1,17 +1,17 @@
 package gorr
 
 import (
+	"gorr/util"
 	"bytes"
 	"encoding/json"
 	"flag"
 	"fmt"
-	"gorr/util"
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
 	"io/ioutil"
 	"net/http"
 	"os"
-	"strings"
+	"path/filepath"
 	"sync"
 	"time"
 )
@@ -19,6 +19,7 @@ import (
 var (
 	tsChan          = make(chan string, 128)
 	s3CaseDir       = flag.String("case_store_dir", "", "s3 path to store test case")
+	envFlagFile     = flag.String("env_flag_file", "", "flag file to server")
 	testCaseHandler = flag.String("test_case_handler_tool", "", "tool to handle test case")
 )
 
@@ -38,11 +39,12 @@ type TestCase struct {
 }
 
 type TestItem struct {
-	DB        []string   `json:"db"`
-	Flags     []string   `json:"flags,omitempty"`
-	Input     []MoveData `json:"input,omitempty"`
-	TestCases []TestCase `json:"cases"`
-	Version   int        `json:"version"`
+	DB          []string   `json:"db"`
+	Flags       []string   `json:"flags,omitempty"`
+	Input       []MoveData `json:"input,omitempty"`
+	TestCases   []TestCase `json:"cases"`
+	Version     int        `json:"version"`
+	EnvFlagFile string     `json:"env_flag_files,omitempty"`
 }
 
 var (
@@ -55,7 +57,29 @@ const (
 	RecorderDataTypeJson     = 24
 	RecorderDataTypePbText   = 25
 	RecorderDataTypePbBinary = 26
+	RecorderDataTypeHttpJson = 27
 )
+
+type HttpSerializedData struct {
+	Body     []byte              `json:"body"`
+	BodyType int                 `json:"btype"`
+	Header   map[string][]string `json:"header"`
+}
+
+func RecordHttpExt(uri, desc, name string, head http.Header, req, rsp []byte, t1, t2 int) (string, error) {
+	data := HttpSerializedData{
+		Body:     req,
+		BodyType: t1,
+		Header:   head,
+	}
+
+	req2, err := json.Marshal(data)
+	if err != nil {
+		return "", fmt.Errorf("serialized http data with header failed, err:%s", err)
+	}
+
+	return RecordData(uri, "", name, req2, RecorderDataTypeHttpJson, rsp, t2, desc, nil)
+}
 
 func RecordHttp(outDir, desc string, req *http.Request, rsp *http.Response, db []string) (string, error) {
 	if req.Body == nil || rsp.Body == nil {
@@ -147,11 +171,7 @@ func RecordData(uri, outDir, name string, req []byte, t1 int, rsp []byte, t2 int
 
 	data := make([]string, 0, len(files))
 	for _, f := range files {
-		idx := strings.LastIndex(f, "/")
-		if idx == -1 {
-			return "", fmt.Errorf("invalid db file path, file:%s", f)
-		}
-		name := f[idx+1:]
+		name := filepath.Base(f)
 		to := outDir + "/" + name
 		err = util.CopyFile(f, to)
 		if err != nil {
@@ -182,6 +202,16 @@ func RecordData(uri, outDir, name string, req []byte, t1 int, rsp []byte, t2 int
 	if len(data) > 0 {
 		mainDb := fmt.Sprintf("-gorr_db_file=%s", data[0])
 		td.Flags = append(td.Flags, mainDb)
+	}
+
+	if len(*envFlagFile) > 0 {
+		name := filepath.Base(*envFlagFile)
+		to := outDir + "/" + name
+		err = util.CopyFile(*envFlagFile, to)
+		if err != nil {
+			return "", fmt.Errorf("copy env flag file failed, from:%s, to:%s, err:%s", *envFlagFile, to, err)
+		}
+		td.EnvFlagFile = name
 	}
 
 	cd, err := ioutil.ReadFile(configFile)

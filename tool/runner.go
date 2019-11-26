@@ -1,10 +1,10 @@
 package main
 
 import (
+	"gorr/util"
 	"encoding/json"
 	"flag"
 	"fmt"
-	"gorr/util"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -37,6 +37,7 @@ type TestItem struct {
 	Input        []MoveData `json:"input"`
 	TestCases    []TestCase `json:"cases"`
 	Version      int        `json:"version"`
+	EnvFlagFile  string     `json:"env_flag_files,omitempty"`
 	Path         string     `json:"-"`
 	FilesChanged []string   `json:"-"`
 	FailAgain    []string   `json:"-"`
@@ -56,8 +57,8 @@ var (
 	TestDataPath          = flag.String("test_case_dir", "", "directory for all test cases")
 	StartCmd              = flag.String("server_start_cmd", "", "cmd to start target server")
 	StopCmd               = flag.String("server_stop_cmd", "", "cmd to stop target server")
-	RegressionDb          = flag.String("gorr_db_path", "", "path to gorr db")
-	RegressionFlagFile    = flag.String("gorr_flag", "", "path to flag file for setting gorr flags")
+	GorrDb          = flag.String("gorr_db_path", "", "path to gorr db")
+	GorrFlagFile    = flag.String("gorr_flag", "", "path to flag file for setting gorr flags")
 	TestCaseConfigPattern = flag.String("test_case_config_pattern", "reg_config.json", "test case config file name")
 	diffTool              = flag.String("diffTool", "./rdiff", "tool to perform diff")
 	updateOldCase         = flag.Int("update_case_from_diff", 0, "whether to update test cases when diff presents")
@@ -142,12 +143,8 @@ func RunTestCase(differ, start_cmd, stop_cmd, addr string, store_dir, gorr_db, g
 		if len(db) > 0 && db[0] != '/' {
 			db = dir + "/" + db
 		}
-		idx := strings.LastIndex(db, "/")
-		if idx == -1 {
-			return 0, []error{fmt.Errorf("invalid db file path, file:%s", db)}
-		}
-		name := db[idx:]
-		err = util.CopyFile(db, gorr_db+name)
+		name := filepath.Base(db)
+		err = util.CopyFile(db, gorr_db+"/"+name)
 		if err != nil {
 			return 0, []error{fmt.Errorf("copy gorr db failed, file:%s, err:%s", db, err.Error())}
 		}
@@ -171,6 +168,25 @@ func RunTestCase(differ, start_cmd, stop_cmd, addr string, store_dir, gorr_db, g
 		fmt.Printf("done copying input data, src:%s, dst:%s\n", src, dst)
 	}
 
+	envFlagFile := ""
+	if len(t.EnvFlagFile) > 0 {
+		src := t.EnvFlagFile
+		if src[0] != '/' {
+			src = dir + "/" + src
+		}
+
+		outdir := filepath.Dir(*GorrFlagFile)
+		dst := outdir + "/" + filepath.Base(src)
+
+		err = util.CopyFile(src, dst)
+		if err != nil {
+			return 0, []error{fmt.Errorf("copying env flag file failed, src:%s, dst:%s", src, dst)}
+		}
+
+		envFlagFile = dst
+		fmt.Printf("done copying env flag file, src:%s, dst:%s\n", src, dst)
+	}
+
 	allFlag := strings.Join(t.Flags, "\n")
 	flagFile, err2 := os.OpenFile(gorr_flag_file, os.O_RDWR|os.O_CREATE, 0666)
 	if err2 != nil {
@@ -187,9 +203,16 @@ func RunTestCase(differ, start_cmd, stop_cmd, addr string, store_dir, gorr_db, g
 		return 0, []error{fmt.Errorf("write to flags file failed, file:%s, err:%s", gorr_flag_file, err3.Error())}
 	}
 
+	envVar := make([]string, 0, 8)
 	caseVer := fmt.Sprintf("CASE_VERSION=%d", t.Version)
 
-	_, err = util.RunCmd(caseVer + " " + start_cmd)
+	envVar = append(envVar, caseVer)
+
+	if len(envFlagFile) > 0 {
+		envVar = append(envVar, fmt.Sprintf("ENV_FLAG_FILE=%s", envFlagFile))
+	}
+
+	_, err = util.RunCmd(strings.Join(envVar, " ") + " " + start_cmd)
 	if err != nil {
 		return 0, []error{fmt.Errorf("run start cmd failed, cmd:%s, err:%s", start_cmd, err.Error())}
 	}
@@ -228,8 +251,8 @@ func RunTestCase(differ, start_cmd, stop_cmd, addr string, store_dir, gorr_db, g
 		output, err := util.RunCmd(cmd)
 
 		if err != nil {
-			fmt.Printf("\033[31m@@@@@%dth test case failed@@@@@@\033[m, runner failed, name:%s, cmd:%s, out:%s\n", i, v.Desc, cmd, output)
-			allErr = append(allErr, fmt.Errorf("\n\033[31m@@@@@@run %dth test case failed@@@@@@\033[m, name:%s, err:%s, cmd:%s, runner output:%s", i, v.Desc, err.Error(), cmd, string(output)))
+			fmt.Printf("\033[31m@@@@@%dth test case failed@@@@@@\033[m, request runner failed, name:%s, cmd:%s, out:%s\n", i, v.Desc, cmd, output)
+			allErr = append(allErr, fmt.Errorf("\n\033[31m@@@@@@run %dth test case failed@@@@@@\033[m, name:%s, err:%s, cmd:%s, request runner output:%s", i, v.Desc, err.Error(), cmd, string(output)))
 			continue
 		}
 
@@ -298,7 +321,7 @@ func main() {
 
 	for i, t := range tests {
 		fmt.Printf("starting to run %dth test suit...\n", i)
-		c, errs := RunTestCase(*diffTool, *StartCmd, *StopCmd, *ServerAddr, *StoreDir, *RegressionDb, *RegressionFlagFile, t)
+		c, errs := RunTestCase(*diffTool, *StartCmd, *StopCmd, *ServerAddr, *StoreDir, *GorrDb, *GorrFlagFile, t)
 
 		if len(errs) > 0 {
 			fmt.Fprintf(os.Stderr, "\033[31m@@@@@@ %dth test suit failed\033[m\n", i)
