@@ -191,7 +191,12 @@ func diffSingle(presence byte, key string, n interface{}) (*diffNode, error) {
 				return nil, err
 			}
 			i++
-			d.child = append(d.child, cd)
+			if cd != nil {
+				d.child = append(d.child, cd)
+			}
+		}
+		if len(d.child) == 0 {
+			return nil, nil
 		}
 	case map[string]interface{}:
 		d.elemType = elemTypeMAP
@@ -202,8 +207,13 @@ func diffSingle(presence byte, key string, n interface{}) (*diffNode, error) {
 				if err != nil {
 					return nil, err
 				}
-				d.child = append(d.child, cd)
+				if cd != nil {
+					d.child = append(d.child, cd)
+				}
 			}
+		}
+		if len(d.child) == 0 {
+			return nil, nil
 		}
 	default:
 		txt := fmt.Sprintf("%+v", n)
@@ -218,7 +228,32 @@ func diffSingle(presence byte, key string, n interface{}) (*diffNode, error) {
 }
 
 func diffAny(key string, ep, at interface{}) (*diffNode, error) {
-	if reflect.TypeOf(ep) != reflect.TypeOf(at) {
+	etype := reflect.TypeOf(ep)
+	atype := reflect.TypeOf(at)
+
+	eValue := reflect.ValueOf(ep)
+	aValue := reflect.ValueOf(at)
+
+	k1 := eValue.Kind()
+	k2 := aValue.Kind()
+
+	if k1 != k2 {
+		v1 := &eValue
+		v2 := &aValue
+
+		if k2 == reflect.Invalid {
+			k1, k2 = k2, k1
+			v1, v2 = v2, v1
+		}
+
+		if k2 == reflect.Slice || k2 == reflect.Array || k2 == reflect.Map {
+			if k1 == reflect.Invalid && v2.Len() == 0 {
+				return nil, nil
+			}
+		}
+	}
+
+	if etype != atype {
 		d := &diffNode{key: key, present: 3}
 
 		expect, err1 := diffSingle(1, key, ep)
