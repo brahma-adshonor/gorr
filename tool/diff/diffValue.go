@@ -217,6 +217,10 @@ func diffSingle(presence byte, key string, n interface{}) (*diffNode, error) {
 		}
 	default:
 		txt := fmt.Sprintf("%+v", n)
+		if len(txt) == 0 {
+			return nil, nil
+		}
+
 		if presence == 1 {
 			d.expect = txt
 		} else {

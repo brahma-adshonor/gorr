@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -57,8 +56,8 @@ var (
 	TestDataPath          = flag.String("test_case_dir", "", "directory for all test cases")
 	StartCmd              = flag.String("server_start_cmd", "", "cmd to start target server")
 	StopCmd               = flag.String("server_stop_cmd", "", "cmd to stop target server")
-	GorrDb          = flag.String("gorr_db_path", "", "path to gorr db")
-	GorrFlagFile    = flag.String("gorr_flag", "", "path to flag file for setting gorr flags")
+	gorrDb          = flag.String("gorr_db_path", "", "path to gorr db")
+	gorrFlagFile    = flag.String("gorr_flag", "", "path to flag file for setting gorr flags")
 	TestCaseConfigPattern = flag.String("test_case_config_pattern", "reg_config.json", "test case config file name")
 	diffTool              = flag.String("diffTool", "./rdiff", "tool to perform diff")
 	updateOldCase         = flag.Int("update_case_from_diff", 0, "whether to update test cases when diff presents")
@@ -101,20 +100,6 @@ func ScanTestData(path string) ([]*TestItem, error) {
 
 	fmt.Printf("scan test cases done, total:%d\n", len(ret))
 	return ret, nil
-}
-
-func SetSystemDate(newTime time.Time) error {
-	_, lookErr := exec.LookPath("date")
-	if lookErr != nil {
-		fmt.Printf("Date binary not found, cannot set system date: %s\n", lookErr.Error())
-		return lookErr
-	} else {
-		//dateString := newTime.Format("2006-01-2 15:4:5")
-		dateString := newTime.Format("2 Jan 2006 15:04:05")
-		fmt.Printf("Setting system date to: %s\n", dateString)
-		args := []string{"--set", dateString}
-		return exec.Command("date", args...).Run()
-	}
 }
 
 func genUniqueFileName(file, suggest string) string {
@@ -175,7 +160,7 @@ func RunTestCase(differ, start_cmd, stop_cmd, addr string, store_dir, gorr_db, g
 			src = dir + "/" + src
 		}
 
-		outdir := filepath.Dir(*GorrFlagFile)
+		outdir := filepath.Dir(*gorrFlagFile)
 		dst := outdir + "/" + filepath.Base(src)
 
 		err = util.CopyFile(src, dst)
@@ -212,12 +197,15 @@ func RunTestCase(differ, start_cmd, stop_cmd, addr string, store_dir, gorr_db, g
 		envVar = append(envVar, fmt.Sprintf("ENV_FLAG_FILE=%s", envFlagFile))
 	}
 
-	_, err = util.RunCmd(strings.Join(envVar, " ") + " " + start_cmd)
+	startServerCmd := strings.Join(envVar, " ") + " " + start_cmd
+
+	_, err = util.RunCmd(startServerCmd)
 	if err != nil {
 		return 0, []error{fmt.Errorf("run start cmd failed, cmd:%s, err:%s", start_cmd, err.Error())}
 	}
 
 	time.Sleep(time.Duration(100) * time.Millisecond)
+	fmt.Printf("start server done, cmd:%s\n", startServerCmd)
 
 	var allErr []error
 	res := store_dir + "/gorr.rsp.dat.tmp"
@@ -226,7 +214,7 @@ func RunTestCase(differ, start_cmd, stop_cmd, addr string, store_dir, gorr_db, g
 	failCnt := 0
 	for i, v := range t.TestCases {
 		num++
-		fmt.Printf("starting to run %dth test case, name:%s, version:%d\n", i, v.Desc, t.Version)
+		fmt.Printf("\nstarting to run %dth test case, name:%s, version:%d\n", i, v.Desc, t.Version)
 
 		cmd := v.Runner
 		if len(cmd) == 0 {
@@ -320,8 +308,8 @@ func main() {
 	files := make([]string, 0, 256)
 
 	for i, t := range tests {
-		fmt.Printf("starting to run %dth test suit...\n", i)
-		c, errs := RunTestCase(*diffTool, *StartCmd, *StopCmd, *ServerAddr, *StoreDir, *GorrDb, *GorrFlagFile, t)
+		fmt.Printf("\nstarting to run %dth test suit...\n", i)
+		c, errs := RunTestCase(*diffTool, *StartCmd, *StopCmd, *ServerAddr, *StoreDir, *gorrDb, *gorrFlagFile, t)
 
 		if len(errs) > 0 {
 			fmt.Fprintf(os.Stderr, "\033[31m@@@@@@ %dth test suit failed\033[m\n", i)
@@ -347,7 +335,7 @@ func main() {
 	}
 
 	data := strings.Join(files, "\n")
-	fmt.Printf("\033[32m%d files updated locally:\033[m\n%s\nrecorder file:%s\n", len(files), data, *outputFileChangedList)
+	fmt.Printf("\n\n\033[32m%d files updated locally:\033[m\n%s\nrecorder file:%s\n", len(files), data, *outputFileChangedList)
 
 	err = ioutil.WriteFile(*outputFileChangedList, []byte(data), 0666)
 	if err != nil {
