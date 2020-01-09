@@ -48,22 +48,29 @@ func TestScan(t *testing.T) {
 func TestRunCase(t *testing.T) {
 	*TestCaseConfigPattern = "config.json"
 	item := &TestItem{
+		Path:  "./dummy.config",
 		DB:    []string{"testdata/dummy.rsp"},
 		Flags: []string{"-h"},
 		Input: []MoveData{MoveData{Src: "testdata/dummy.rsp", Dst: "/tmp/dummy.rsp"}},
-		TestCases: []TestCase{
-			TestCase{Req: "dummy.req", Rsp: "testdata/dummy.rsp", Desc: "dummy test", Runner: "/bin/echo"}, // succ
-			TestCase{Req: "dummy.req", Rsp: "dummy2.rsp", Desc: "dummy test", Runner: "/bin/echo"},         // fail
-			TestCase{Req: "dummy.req", Rsp: "dummy.rsp", Desc: "dummy test", Runner: "/bin/echo2"},         // fail
+		TestCases: []*TestCase{
+			&TestCase{Req: "dummy.req", Rsp: "testdata/dummy.rsp", Desc: "dummy test", Runner: "/bin/echo"}, // succ
+			&TestCase{Req: "dummy.req", Rsp: "dummy2.rsp", Desc: "dummy test", Runner: "/bin/echo"},         // fail
+			&TestCase{Req: "dummy.req", Rsp: "dummy.rsp", Desc: "dummy test", Runner: "/bin/echo2"},         // fail
 		},
 	}
 
-	_, err := RunTestCase("./rdiff", "/bin/ls", "/bin/ls", "1.1.1.1:233", "./testdata", "/tmp", "./testdata/f.test.flag", item)
+	nt, ret := RunTestCase("./rdiff", "/bin/ls", "/bin/ls", "1.1.1.1:233", "./testdata", "/tmp", "./testdata/f.test.flag", item)
 
-	assert.Equal(t, 2, len(err))
-	fmt.Printf("total err:\n%v\n", err)
+	assert.Equal(t, 2, ret.Fail)
 
+	fmt.Printf("total err:%d\nmsg:%+v\ndiff:%+v", ret.Fail, ret.Msg, ret.Diff)
+
+	os.Remove(item.Path)
 	os.Remove("./testdata/f.test.flag")
+
+	for _, t := range nt {
+		os.Remove(t.Path)
+	}
 }
 
 func TestMain(m *testing.M) {
@@ -74,5 +81,9 @@ func TestMain(m *testing.M) {
 		fmt.Printf("build diff tool failed\n")
 		os.Exit(23)
 	}
-	os.Exit(m.Run())
+
+	ret := m.Run()
+	func() { os.Remove("./rdiff") }()
+
+	os.Exit(ret)
 }

@@ -4,9 +4,7 @@ import (
 	"gorr/util"
 	"bytes"
 	"encoding/json"
-	"flag"
 	"fmt"
-	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
 	"io/ioutil"
 	"net/http"
@@ -18,10 +16,21 @@ import (
 
 var (
 	tsChan          = make(chan string, 128)
-	s3CaseDir       = flag.String("case_store_dir", "", "s3 path to store test case")
-	envFlagFile     = flag.String("env_flag_file", "", "flag file to server")
-	testCaseHandler = flag.String("test_case_handler_tool", "", "tool to handle test case")
+	s3CaseDir       string
+	envFlagFile     string
+	testCaseHandler string
+	/*
+		s3CaseDir       = flag.String("case_store_dir", "", "s3 path to store test case")
+		envFlagFile     = flag.String("env_flag_file", "", "flag file to server")
+		testCaseHandler = flag.String("test_case_handler_tool", "", "tool to handle test case")
+	*/
 )
+
+func init() {
+	envFlagFile = os.Getenv("ENV_FLAG_FILE")
+	s3CaseDir = os.Getenv("TEST_CASE_STORE_DIR")
+	testCaseHandler = os.Getenv("TEST_CASE_HANDLER")
+}
 
 type MoveData struct {
 	Src string `json:"src"`
@@ -39,12 +48,12 @@ type TestCase struct {
 }
 
 type TestItem struct {
-	DB          []string   `json:"db"`
-	Flags       []string   `json:"flags,omitempty"`
-	Input       []MoveData `json:"input,omitempty"`
-	TestCases   []TestCase `json:"cases"`
-	Version     int        `json:"version"`
-	EnvFlagFile string     `json:"env_flag_files,omitempty"`
+	DB          []string    `json:"db"`
+	Flags       []string    `json:"flags,omitempty"`
+	Input       []MoveData  `json:"input,omitempty"`
+	TestCases   []*TestCase `json:"cases"`
+	Version     int         `json:"version"`
+	EnvFlagFile string      `json:"env_flag_files,omitempty"`
 }
 
 var (
@@ -73,7 +82,7 @@ func RecordHttpExt(uri, desc, name string, head http.Header, req, rsp []byte, t1
 		Header:   head,
 	}
 
-	req2, err := json.Marshal(data)
+	req2, err := json.MarshalIndent(data, "", "\t")
 	if err != nil {
 		return "", fmt.Errorf("serialized http data with header failed, err:%s", err)
 	}
@@ -104,13 +113,12 @@ func RecordHttp(outDir, desc string, req *http.Request, rsp *http.Response, db [
 }
 
 func RecordGrpc(outDir, desc string, req proto.Message, rsp proto.Message, db []string) (string, error) {
-	d1, err1 := json.Marshal(req)
+	d1, err1 := json.MarshalIndent(req, "", "\n")
 	if err1 != nil {
 		return "", fmt.Errorf("marshal grpc request failed, err:%s", err1.Error())
 	}
 
-	m := jsonpb.Marshaler{}
-	d2, err2 := m.MarshalToString(rsp)
+	d2, err2 := json.MarshalIndent(rsp, "", "\n")
 	if err2 != nil {
 		return "", fmt.Errorf("marshal grpc response failed, err:%s", err2.Error())
 	}
@@ -187,8 +195,8 @@ func RecordData(uri, outDir, name string, req []byte, t1 int, rsp []byte, t2 int
 		DB:      data,
 		Version: 1,
 		Flags:   []string{"-gorr_run_type=2", fmt.Sprintf("-server_time=%s", ts)},
-		TestCases: []TestCase{
-			TestCase{
+		TestCases: []*TestCase{
+			&TestCase{
 				Req:     f1,
 				Rsp:     f2,
 				URI:     uri,
@@ -204,12 +212,12 @@ func RecordData(uri, outDir, name string, req []byte, t1 int, rsp []byte, t2 int
 		td.Flags = append(td.Flags, mainDb)
 	}
 
-	if len(*envFlagFile) > 0 {
-		name := filepath.Base(*envFlagFile)
+	if len(envFlagFile) > 0 {
+		name := filepath.Base(envFlagFile)
 		to := outDir + "/" + name
-		err = util.CopyFile(*envFlagFile, to)
+		err = util.CopyFile(envFlagFile, to)
 		if err != nil {
-			return "", fmt.Errorf("copy env flag file failed, from:%s, to:%s, err:%s", *envFlagFile, to, err)
+			return "", fmt.Errorf("copy env flag file failed, from:%s, to:%s, err:%s", envFlagFile, to, err)
 		}
 		td.EnvFlagFile = name
 	}
@@ -234,7 +242,7 @@ func RecordData(uri, outDir, name string, req []byte, t1 int, rsp []byte, t2 int
 		return "", fmt.Errorf("writing config file failed, err:%s", err.Error())
 	}
 
-	if len(*testCaseHandler) > 0 && len(*s3CaseDir) > 0 {
+	if len(testCaseHandler) > 0 && len(s3CaseDir) > 0 {
 		tsChan <- outDir
 	}
 
@@ -242,7 +250,7 @@ func RecordData(uri, outDir, name string, req []byte, t1 int, rsp []byte, t2 int
 }
 
 func RunTestCaseUploader() {
-	if len(*testCaseHandler) > 0 && len(*s3CaseDir) > 0 {
+	if len(testCaseHandler) > 0 && len(s3CaseDir) > 0 {
 		go doUpload()
 	}
 }
@@ -250,7 +258,7 @@ func RunTestCaseUploader() {
 func doUpload() {
 	for {
 		d := <-tsChan
-		cmd := fmt.Sprintf("S3_CASE_DIR=%s LOCAL_CASE_DIR=%s %s", *s3CaseDir, d, *testCaseHandler)
+		cmd := fmt.Sprintf("S3_CASE_DIR=%s LOCAL_CASE_DIR=%s %s", s3CaseDir, d, testCaseHandler)
 
 		out, err := util.RunCmd(cmd)
 

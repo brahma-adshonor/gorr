@@ -31,15 +31,15 @@ type TestCase struct {
 }
 
 type TestItem struct {
-	DB           []string   `json:"db"`
-	Flags        []string   `json:"flags"`
-	Input        []MoveData `json:"input"`
-	TestCases    []TestCase `json:"cases"`
-	Version      int        `json:"version"`
-	EnvFlagFile  string     `json:"env_flag_files,omitempty"`
-	Path         string     `json:"-"`
-	FilesChanged []string   `json:"-"`
-	FailAgain    []string   `json:"-"`
+	DB           []string    `json:"db"`
+	Flags        []string    `json:"flags"`
+	Input        []MoveData  `json:"input"`
+	TestCases    []*TestCase `json:"cases"`
+	Version      int         `json:"version"`
+	EnvFlagFile  string      `json:"env_flag_files,omitempty"`
+	Path         string      `json:"-"`
+	FilesChanged []string    `json:"-"`
+	FailAgain    []string    `json:"-"`
 }
 
 const (
@@ -56,21 +56,23 @@ var (
 	TestDataPath          = flag.String("test_case_dir", "", "directory for all test cases")
 	StartCmd              = flag.String("server_start_cmd", "", "cmd to start target server")
 	StopCmd               = flag.String("server_stop_cmd", "", "cmd to stop target server")
-	gorrDb          = flag.String("gorr_db_path", "", "path to gorr db")
-	gorrFlagFile    = flag.String("gorr_flag", "", "path to flag file for setting gorr flags")
+	RegressionDb          = flag.String("regression_db_path", "", "path to regression db")
+	RegressionFlagFile    = flag.String("regression_flag", "", "path to flag file for setting regression flags")
 	TestCaseConfigPattern = flag.String("test_case_config_pattern", "reg_config.json", "test case config file name")
 	diffTool              = flag.String("diffTool", "./rdiff", "tool to perform diff")
 	updateOldCase         = flag.Int("update_case_from_diff", 0, "whether to update test cases when diff presents")
 	onTestSuitFailCmd     = flag.String("on_test_suit_fail_handler", "", "cmd to execute on test suit failure")
 	outputFileChangedList = flag.String("output_file_changed", "files.changed", "file to record file that is updated")
 	failAgainListFile     = flag.String("output_fail_again", "", "file to store fail again test case")
+	commonFlag            = flag.String("common_server_flag", "", "common flags(newline separated) to pass to server for every run")
 )
 
+// ScanTestData scan given directory searching for test suit config file
 func ScanTestData(path string) ([]*TestItem, error) {
 	files := make([]string, 0, 1024)
 	filepath.Walk(path, func(fp string, info os.FileInfo, err error) error {
 		name := filepath.Base(fp)
-		if name == *TestCaseConfigPattern {
+		if strings.Contains(name, *TestCaseConfigPattern) {
 			files = append(files, fp)
 		}
 		return nil
@@ -115,26 +117,67 @@ func genUniqueFileName(file, suggest string) string {
 		}
 	}
 
-	panic("can not create gorr output dir")
+	panic("can not create regression output dir")
 }
 
-func RunTestCase(differ, start_cmd, stop_cmd, addr string, store_dir, gorr_db, gorr_flag_file string, t *TestItem) (int, []error) {
+func splitTestCase(t *TestItem, idx int) *TestItem {
+	sz := len(t.TestCases)
+	if sz <= 1 || idx >= sz {
+		return nil
+	}
+
+	nt := *t
+	nt.Path = genUniqueFileName(nt.Path, "bt")
+	nt.TestCases = []*TestCase{t.TestCases[idx]}
+	t.TestCases[idx] = nil
+	return &nt
+}
+
+// DiffInfo diff info for display
+type DiffInfo struct {
+	ReqFile     string
+	RspFile     string
+	RspActual   string
+	DiffContent string
+}
+
+// RunTestResult run test suit result
+// Code 0 for failure, 1 for success
+// Diff: testsuit path to diff text content
+type RunTestResult struct {
+	Succ int
+	Fail int
+	Msg  []string
+	Diff map[string]DiffInfo
+}
+
+// RunTestCase run all cases from a test suit
+func RunTestCase(differ, start_cmd, stop_cmd, addr string, store_dir, regression_db, regression_flag_file string, t *TestItem) ([]*TestItem, *RunTestResult) {
 	util.RunCmd(stop_cmd)
 
 	var err error
 	dir := filepath.Dir(t.Path)
+
+	ret := &RunTestResult{}
+	ret.Diff = make(map[string]DiffInfo)
+	ret.Msg = make([]string, 0, len(t.TestCases))
 
 	for _, db := range t.DB {
 		if len(db) > 0 && db[0] != '/' {
 			db = dir + "/" + db
 		}
 		name := filepath.Base(db)
-		err = util.CopyFile(db, gorr_db+"/"+name)
+		err = util.CopyFile(db, regression_db+"/"+name)
 		if err != nil {
-			return 0, []error{fmt.Errorf("copy gorr db failed, file:%s, err:%s", db, err.Error())}
+			ret.Fail++
+
+			m := fmt.Sprintf("copy regression db failed, file:%s, err:%s", db, err.Error())
+			ret.Msg = append(ret.Msg, m)
+			return nil, ret
 		}
 
-		fmt.Printf("done copying db data, src:%s, dst:%s\n", db, gorr_db+name)
+		m := fmt.Sprintf("done copying db data, src:%s, dst:%s", db, regression_db+name)
+		ret.Msg = append(ret.Msg, m)
 	}
 
 	for i, v := range t.Input {
@@ -148,9 +191,14 @@ func RunTestCase(differ, start_cmd, stop_cmd, addr string, store_dir, gorr_db, g
 		}
 		err = util.CopyFile(src, dst)
 		if err != nil {
-			return 0, []error{fmt.Errorf("copying %dth input failed, src:%s, dst:%s", i, src, dst)}
+			ret.Fail++
+			m := fmt.Sprintf("copying %dth input failed, src:%s, dst:%s", i, src, dst)
+			ret.Msg = append(ret.Msg, m)
+			return nil, ret
 		}
-		fmt.Printf("done copying input data, src:%s, dst:%s\n", src, dst)
+
+		m := fmt.Sprintf("done copying input data, src:%s, dst:%s", src, dst)
+		ret.Msg = append(ret.Msg, m)
 	}
 
 	envFlagFile := ""
@@ -160,22 +208,33 @@ func RunTestCase(differ, start_cmd, stop_cmd, addr string, store_dir, gorr_db, g
 			src = dir + "/" + src
 		}
 
-		outdir := filepath.Dir(*gorrFlagFile)
+		outdir := filepath.Dir(*RegressionFlagFile)
 		dst := outdir + "/" + filepath.Base(src)
 
 		err = util.CopyFile(src, dst)
 		if err != nil {
-			return 0, []error{fmt.Errorf("copying env flag file failed, src:%s, dst:%s", src, dst)}
+			ret.Fail++
+			m := fmt.Sprintf("copying env flag file failed, src:%s, dst:%s", src, dst)
+			ret.Msg = append(ret.Msg, m)
+			return nil, ret
 		}
 
 		envFlagFile = dst
-		fmt.Printf("done copying env flag file, src:%s, dst:%s\n", src, dst)
+		m := fmt.Sprintf("done copying env flag file, src:%s, dst:%s", src, dst)
+		ret.Msg = append(ret.Msg, m)
 	}
 
 	allFlag := strings.Join(t.Flags, "\n")
-	flagFile, err2 := os.OpenFile(gorr_flag_file, os.O_RDWR|os.O_CREATE, 0666)
+	if len(*commonFlag) > 0 {
+		allFlag = allFlag + "\n" + *commonFlag
+	}
+
+	flagFile, err2 := os.OpenFile(regression_flag_file, os.O_RDWR|os.O_CREATE, 0666)
 	if err2 != nil {
-		return 0, []error{fmt.Errorf("open flags file failed, file:%s, err:%s", gorr_flag_file, err2.Error())}
+		ret.Fail++
+		m := fmt.Sprintf("open flags file failed, file:%s, err:%s", regression_flag_file, err2.Error())
+		ret.Msg = append(ret.Msg, m)
+		return nil, ret
 	}
 
 	flagFile.Truncate(0)
@@ -185,7 +244,10 @@ func RunTestCase(differ, start_cmd, stop_cmd, addr string, store_dir, gorr_db, g
 	flagFile.Close()
 
 	if err3 != nil {
-		return 0, []error{fmt.Errorf("write to flags file failed, file:%s, err:%s", gorr_flag_file, err3.Error())}
+		ret.Fail++
+		m := fmt.Sprintf("write to flags file failed, file:%s, err:%s", regression_flag_file, err3.Error())
+		ret.Msg = append(ret.Msg, m)
+		return nil, ret
 	}
 
 	envVar := make([]string, 0, 8)
@@ -201,20 +263,31 @@ func RunTestCase(differ, start_cmd, stop_cmd, addr string, store_dir, gorr_db, g
 
 	_, err = util.RunCmd(startServerCmd)
 	if err != nil {
-		return 0, []error{fmt.Errorf("run start cmd failed, cmd:%s, err:%s", start_cmd, err.Error())}
+		ret.Fail++
+		m := fmt.Sprintf("run start cmd failed, cmd:%s, err:%s", start_cmd, err.Error())
+		ret.Msg = append(ret.Msg, m)
+		return nil, ret
 	}
 
 	time.Sleep(time.Duration(100) * time.Millisecond)
-	fmt.Printf("start server done, cmd:%s\n", startServerCmd)
+	m := fmt.Sprintf("start server done, cmd:%s", startServerCmd)
+	ret.Msg = append(ret.Msg, m)
 
-	var allErr []error
 	res := store_dir + "/gorr.rsp.dat.tmp"
 
 	num := 0
-	failCnt := 0
+
+	fail := make([]int, 0, len(t.TestCases))
+	succ := make([]*TestCase, 0, len(t.TestCases))
+
+	newTest := make([]*TestItem, 0, len(t.TestCases))
+
+	caseNum := len(t.TestCases)
+
 	for i, v := range t.TestCases {
 		num++
-		fmt.Printf("\nstarting to run %dth test case, name:%s, version:%d\n", i, v.Desc, t.Version)
+		m = fmt.Sprintf("starting to run %dth test case, name:%s, version:%d", i, v.Desc, t.Version)
+		ret.Msg = append(ret.Msg, m)
 
 		cmd := v.Runner
 		if len(cmd) == 0 {
@@ -239,8 +312,10 @@ func RunTestCase(differ, start_cmd, stop_cmd, addr string, store_dir, gorr_db, g
 		output, err := util.RunCmd(cmd)
 
 		if err != nil {
-			fmt.Printf("\033[31m@@@@@%dth test case failed@@@@@@\033[m, request runner failed, name:%s, cmd:%s, out:%s\n", i, v.Desc, cmd, output)
-			allErr = append(allErr, fmt.Errorf("\n\033[31m@@@@@@run %dth test case failed@@@@@@\033[m, name:%s, err:%s, cmd:%s, request runner output:%s", i, v.Desc, err.Error(), cmd, string(output)))
+			ret.Fail++
+			fail = append(fail, i)
+			m = fmt.Sprintf("\033[31m@@@@@%dth test case failed@@@@@@\033[m, request runner failed, name:%s, cmd:%s, out:%s", i, v.Desc, cmd, output)
+			ret.Msg = append(ret.Msg, m)
 			continue
 		}
 
@@ -256,46 +331,99 @@ func RunTestCase(differ, start_cmd, stop_cmd, addr string, store_dir, gorr_db, g
 
 		if err != nil || len(output) > 0 {
 			if v.Failed == 0 || *updateOldCase > 0 {
-				failCnt++
-				fmt.Printf("\033[31m@@@@@%dth test case failed@@@@@\033[m, name:%s, err:%v, cmd:%s, failed before:%d, update failed:%d\n", i, v.Desc, err, cmd, v.Failed, *updateOldCase)
-				m := fmt.Sprintf("diff failed, msg:%s", string(output))
-				allErr = append(allErr, fmt.Errorf("\n\033[31m@@@@@@ %dth test case FAILED@@@@@@\033[m, name:%s, diffcmd:%s, detail:\n%s", i, v.Desc, diffCmd, m))
+                //fmt.Printf("%d-th failed, diffcmd:%s\n", i, diffCmd)
+				if caseNum == 1 {
+					m = fmt.Sprintf("diff failed, msg:\n%s", string(output))
+					ret.Diff[t.Path] = DiffInfo{
+						ReqFile:     reqFile,
+						RspFile:     rspFile,
+						RspActual:   res,
+						DiffContent: m,
+					}
+					m = fmt.Sprintf("\033[31m@@@@@%dth test case failed@@@@@\033[m, name:%s, err:%v, cmd:%s, diffcmd:%s, failed before:%d, update failed:%d", i, v.Desc, err, cmd, diffCmd, v.Failed, *updateOldCase)
+					ret.Msg = append(ret.Msg, m)
+				}
+
 				if *updateOldCase > 0 {
-					bak := genUniqueFileName(rspFile, "prev")
+					bak := genUniqueFileName("diff", "prev")
 					util.CopyFile(rspFile, bak)
 					t.TestCases[i].Failed = 0
 					t.FilesChanged = append(t.FilesChanged, bak)
 					err = util.CopyFile(res, rspFile)
 					t.FilesChanged = append(t.FilesChanged, rspFile)
-					fmt.Printf("update test case(%d) from diff, err:%s\n", i, err)
-				} else {
+					m = fmt.Sprintf("\033[31m@@@@@update test case(%d) from diff@@@@@\033[m, err:%s", i, err)
+					ret.Msg = append(ret.Msg, m)
+				} else if caseNum == 1 {
 					t.TestCases[i].Failed = 1
 				}
 			} else {
-				fc := fmt.Sprintf("%s/%dth-case", dir, i)
+				fc := fmt.Sprintf("%s/%dth-case", t.Path, i)
 				t.FailAgain = append(t.FailAgain, fc)
-				m := fmt.Sprintf("diff failed, msg:%s", string(output))
-				fmt.Printf("\033[31m@@@@@%dth test case failed AGAIN@@@@@\033[m, name:%s, err:%v, cmd:%s\ndiff:%s\n", i, v.Desc, err, cmd, m)
+				m = fmt.Sprintf("diff failed, msg:%s", string(output))
+				ret.Diff[t.Path] = DiffInfo{
+					ReqFile:     reqFile,
+					RspFile:     rspFile,
+					RspActual:   res,
+					DiffContent: m,
+				}
+				m = fmt.Sprintf("\033[31m@@@@@%dth test case failed AGAIN@@@@@\033[m, name:%s, err:%v, cmd:%s", i, v.Desc, err, cmd)
+				ret.Msg = append(ret.Msg, m)
 			}
+
+			ret.Fail++
+			fail = append(fail, i)
 			continue
 		}
 
-		fmt.Printf("\033[32m@@@@@done running %dth test case@@@@@\033[m, name:%s, cmd:%s\n", i, v.Desc, cmd)
+		ret.Succ++
+		succ = append(succ, v)
+		m = fmt.Sprintf("\033[32m@@@@@done running %dth test case@@@@@\033[m, name:%s, cmd:%s", i, v.Desc, cmd)
+		ret.Msg = append(ret.Msg, m)
 	}
 
-	if failCnt > 0 {
-		data, err := json.Marshal(t)
+	for _, idx := range fail {
+		v := t.TestCases[idx]
+		nt := splitTestCase(t, idx)
+		if nt == nil {
+			succ = append(succ, v)
+			continue
+		}
+
+		var data []byte
+		data, err = json.MarshalIndent(nt, "", "\t")
+		if err == nil {
+			err = ioutil.WriteFile(nt.Path, data, 0666)
+		}
+
+		if err != nil {
+			succ = append(succ, v)
+			m := fmt.Sprintf("\033[31m@@@@@@@write splitted test case failed:\033[m %s, err:%s", nt.Path, err)
+			ret.Msg = append(ret.Msg, m)
+		} else {
+			newTest = append(newTest, nt)
+			t.FilesChanged = append(t.FilesChanged, nt.Path)
+			m := fmt.Sprintf("\033[31m@@@@@@@%d-th test case splitted to:\033[m %s", idx, nt.Path)
+			ret.Msg = append(ret.Msg, m)
+		}
+	}
+
+	if len(fail) > 0 {
+		t.TestCases = succ
+		data, err := json.MarshalIndent(t, "", "\t")
 		if err == nil {
 			ioutil.WriteFile(t.Path, data, 0666)
 			t.FilesChanged = append(t.FilesChanged, t.Path)
-			fmt.Printf("config for test suit is updated:%s\n", t.Path)
+			m := fmt.Sprintf("\033[32m@@@@@@@config for test suit is updated:\033[m %s", t.Path)
+			ret.Msg = append(ret.Msg, m)
 		}
 	}
-	return num, allErr
+
+	return newTest, ret
 }
 
 func main() {
 	flag.Parse()
+
 	tests, err := ScanTestData(*TestDataPath)
 	if err != nil {
 		fmt.Printf("scan test cases failed, path:%s, err:%s\n", *TestDataPath, err.Error())
@@ -303,35 +431,65 @@ func main() {
 	}
 
 	total := 0
+	totalTestSuit := 0
+
 	totalErr := 0
-	fa := make([]string, 0, 264)
-	files := make([]string, 0, 256)
+	fa := make([]string, 0, len(tests))
+	files := make([]string, 0, len(tests))
+	newTest := make([]*TestItem, 0, len(tests))
 
+RUN:
 	for i, t := range tests {
-		fmt.Printf("\nstarting to run %dth test suit...\n", i)
-		c, errs := RunTestCase(*diffTool, *StartCmd, *StopCmd, *ServerAddr, *StoreDir, *gorrDb, *gorrFlagFile, t)
+		testNum := len(t.TestCases)
 
-		if len(errs) > 0 {
-			fmt.Fprintf(os.Stderr, "\033[31m@@@@@@ %dth test suit failed\033[m\n", i)
-			for _, err := range errs {
-				fmt.Fprintf(os.Stderr, "\033[31m@@@@@@@ error msg @@@@@@@@\033[m\n%s\n", err.Error())
+		idx := i + totalTestSuit
+		fmt.Printf("\033[32m==> start to run %d-th test suit...\033[m\n", idx)
+		nt, ret := RunTestCase(*diffTool, *StartCmd, *StopCmd, *ServerAddr, *StoreDir, *RegressionDb, *RegressionFlagFile, t)
+
+		newTest = append(newTest, nt...)
+
+		fmt.Printf("\033[32m==> run %d-th testsuit done, succ:%d, fail:%d, run info see following:\033[m\n", idx, ret.Succ, ret.Fail)
+
+		if ret.Fail > 0 {
+			for _, m := range ret.Msg {
+				fmt.Printf("%s\n", m)
 			}
 
-			totalErr += len(errs)
+			totalErr += ret.Fail
 			files = append(files, t.FilesChanged...)
-			if len(*onTestSuitFailCmd) > 0 {
-				_, err := util.RunCmd(*onTestSuitFailCmd)
-				fmt.Fprintf(os.Stderr, "\033[31m@@@@@@@ run error handler:%s, err:%s @@@@@@@@\033[m", *onTestSuitFailCmd, err)
+
+			if testNum == 1 && len(*onTestSuitFailCmd) > 0 {
+				diffFile := fmt.Sprintf("%s/diff", *StoreDir)
+				for k, v := range ret.Diff {
+					df := genUniqueFileName(diffFile, "ts")
+					err := ioutil.WriteFile(df, []byte(v.DiffContent), 066)
+					if err != nil {
+						fmt.Printf("write diff file failed, err:%s, diff:%s\n", err, v)
+						continue
+					}
+
+					cmd := fmt.Sprintf("TS_ID=%d TS_PATH=%s DIFF_FILE=%s REQ_FILE=%s RSP_FILE=%s RSP_ACTUAL=%s %s",
+						idx, t.Path, df, v.ReqFile, v.RspFile, v.RspActual, *onTestSuitFailCmd)
+
+					out, err := util.RunCmd(cmd)
+					fmt.Printf("\033[31m==>run fail handler:%s for test:%s, err:%s, diff:%s, output:033[m\n%s\n", cmd, k, err, df, string(out))
+				}
 			}
-		} else {
-			fmt.Printf("\033[32mdone running %dth test suit...\033[m\n\n", i)
 		}
 
 		if len(t.FailAgain) > 0 {
 			fa = append(fa, t.FailAgain...)
 		}
 
-		total += c
+		total += ret.Succ + ret.Fail
+	}
+
+	totalTestSuit += len(tests)
+
+	if len(newTest) > 0 {
+		tests = newTest
+		newTest = make([]*TestItem, 0, 64)
+		goto RUN
 	}
 
 	data := strings.Join(files, "\n")

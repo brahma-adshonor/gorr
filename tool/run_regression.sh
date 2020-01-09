@@ -21,10 +21,12 @@ fi
 chmod 755 ${REGRESSION_RUNNER}
 echo "starting regression_runner @ ${INSTALL_DIR}..."
 
+echo >${INSTALL_DIR}/regression/run.log || true
+echo >${INSTALL_DIR}/regression/server.log || true
 echo >${INSTALL_DIR}/regression/fail.again || true
 echo >${INSTALL_DIR}/regression/file.changed || true
 
-on_fail_handler="cat ${SERVER_LOG} >> ${INSTALL_DIR}/regression/run.log"
+on_fail_handler="SERVER_LOG=${SERVER_LOG} INSTALL_DIR=${INSTALL_DIR} ${FAILURE_HANDLER}"
 
 update_case_on_fail=0
 if [[ ${UPDATE_FAIL_CASE} == "1" ]]; then
@@ -48,14 +50,38 @@ ${REGRESSION_RUNNER} \
 ec=$?
 /bin/bash ${SERVER_STOP} || true
 
-if [[ "$ec" != "0" && ${ERR_FORWARDER} != "" ]]; then
-    msg=$(cat ${INSTALL_DIR}/regression/run.log)
-    curl "$ERR_FORWARDER" -d "cirobot-msg-forwarder:\n${msg}" || true
+function SendFileToWework() {
+    ct="$(cat $1)"
+    if [[ "${ct}" == "" ]]; then
+        return
+    fi
+
+    f=${1}
+    echo "cirobot-msg-forwarder:${ct}" >${f}
+    curl "$ERR_FORWARDER" -d "@${f}" || true
+}
+
+function SendToWework() {
+    if [[ "$1" == "" ]]; then
+        return
+    fi
+
+    ss=$(echo "${1}" | awk '{for(i=1;i<length;i+=1048) print substr($0,i,1048)}')
+
+    for m in "${ss}"; do
+        curl "$ERR_FORWARDER" -d "cirobot-msg-forwarder:${m}" || true
+    done
+}
+
+fa=${INSTALL_DIR}/regression/fail.again
+if [[ ${ERR_FORWARDER} != "" ]]; then
+    #SendFileToWework "${fa}"
+    SendToWework "$(cat $fa)" #quote is required, otherwise newline will be removed
 fi
 
-fa=$(cat ${INSTALL_DIR}/regression/fail.again)
-if [[ "${fa}" != "" ]]; then
-    curl "$ERR_FORWARDER" -d "cirobot-msg-forwarder:\n${fa}" || true
+if [[ "$ec" != "0" && ${ERR_FORWARDER} != "" ]]; then
+    #SendFileToWework "${INSTALL_DIR}/regression/run.log"
+    SendToWework "$(cat ${INSTALL_DIR}/regression/run.log)"
 fi
 
 cd ${INSTALL_DIR}/regression

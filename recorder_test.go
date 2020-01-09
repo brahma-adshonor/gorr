@@ -66,7 +66,7 @@ func TestRecordHttp(t *testing.T) {
 	assert.Equal(t, fmt.Sprintf("-server_time=%s", curTm.Format(time.RFC3339)), ti.Flags[1])
 
 	assert.Equal(t, []string{"reg_db1.db", "reg_db2.db"}, ti.DB)
-	assert.Equal(t, TestCase{Req: "reg_req_http.dat", Rsp: "reg_rsp_http.dat", Desc: "miliao_http_test", ReqType: RecorderDataTypeJson, RspType: RecorderDataTypeJson}, ti.TestCases[0])
+	assert.Equal(t, &TestCase{Req: "reg_req_http.dat", Rsp: "reg_rsp_http.dat", Desc: "miliao_http_test", ReqType: RecorderDataTypeJson, RspType: RecorderDataTypeJson}, ti.TestCases[0])
 
 	os.RemoveAll(out)
 }
