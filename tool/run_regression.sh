@@ -18,6 +18,9 @@ if $(command -v aws >/dev/null 2>&1); then
     fi
 fi
 
+export AWS_SECRET_KEY="dummy_aws_secret_key_for_replay"
+export AWS_ACCESS_KEY_ID="dummy_aws_access_key_id_for_replay"
+
 chmod 755 ${REGRESSION_RUNNER}
 echo "starting regression_runner @ ${INSTALL_DIR}..."
 
@@ -25,6 +28,9 @@ echo >${INSTALL_DIR}/regression/run.log || true
 echo >${INSTALL_DIR}/regression/server.log || true
 echo >${INSTALL_DIR}/regression/fail.again || true
 echo >${INSTALL_DIR}/regression/file.changed || true
+
+echo "following test case failed:" >${INSTALL_DIR}/regression/fail.list.log || true
+echo "===========================" >>${INSTALL_DIR}/regression/fail.list.log || true
 
 on_fail_handler="SERVER_LOG=${SERVER_LOG} INSTALL_DIR=${INSTALL_DIR} ${FAILURE_HANDLER}"
 
@@ -50,6 +56,9 @@ ${REGRESSION_RUNNER} \
 ec=$?
 /bin/bash ${SERVER_STOP} || true
 
+unset AWS_SECRET_KEY
+unset AWS_ACCESS_KEY_ID
+
 function SendFileToWework() {
     ct="$(cat $1)"
     if [[ "${ct}" == "" ]]; then
@@ -66,22 +75,34 @@ function SendToWework() {
         return
     fi
 
-    ss=$(echo "${1}" | awk '{for(i=1;i<length;i+=1048) print substr($0,i,1048)}')
+    ss=$(echo "${1}" | awk '{for(i=1;i<length;i+=10480) print substr($0,i,10480)}')
 
     for m in "${ss}"; do
         curl "$ERR_FORWARDER" -d "cirobot-msg-forwarder:${m}" || true
     done
 }
 
-fa=${INSTALL_DIR}/regression/fail.again
-if [[ ${ERR_FORWARDER} != "" ]]; then
-    #SendFileToWework "${fa}"
-    SendToWework "$(cat $fa)" #quote is required, otherwise newline will be removed
-fi
+#fa=${INSTALL_DIR}/regression/fail.again
+#if [[ ${ERR_FORWARDER} != "" ]]; then
+#    SendToWework "$(cat $fa)" #quote is required, otherwise newline will be removed
+#fi
 
 if [[ "$ec" != "0" && ${ERR_FORWARDER} != "" ]]; then
     #SendFileToWework "${INSTALL_DIR}/regression/run.log"
-    SendToWework "$(cat ${INSTALL_DIR}/regression/run.log)"
+
+    dt=$(date '+%Y.%m.%d.%H.%M.%S')
+    from="${INSTALL_DIR}/regression/run.log"
+    target="${CASE_DIR}/log/run.info.${dt}.txt"
+
+    aws s3 cp --expires "$(date -d '+4 weeks' --utc +'%Y-%m-%dT%H:%M:%SZ')" --content-type "text/plain" ${from} ${target} || {
+        echo "upload log file to aws failed"
+    }
+
+    url=$(aws s3 presign ${target} --expires-in 1209600)
+
+    echo "  =====>[runlog](${url})<=====" >>${INSTALL_DIR}/regression/fail.list.log
+
+    SendToWework "$(cat ${INSTALL_DIR}/regression/fail.list.log)"
 fi
 
 cd ${INSTALL_DIR}/regression

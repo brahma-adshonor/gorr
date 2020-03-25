@@ -22,11 +22,12 @@ const (
 )
 
 const (
-	RegressionHttpHook  = 100
-	RegressionConnHook  = 101
-	RegressionRedisHook = 102
-	RegressionGrpcHook  = 103
-	RegressionSqlHook   = 104
+	RegressionHttpHook    = 100
+	RegressionConnHook    = 101
+	RegressionRedisHook   = 102
+	RegressionGrpcHook    = 103
+	RegressionSqlHook     = 104
+	RegressionOutputReset = 105
 )
 
 type Storage interface {
@@ -76,6 +77,7 @@ func InitRegressionEngine() int {
 		for {
 			if *RegressionRunType == RegressionRecord {
 				GlobalMgr.ResetTestSuitDir()
+				GlobalMgr.reset(RegressionOutputReset)
 			}
 			time.Sleep(time.Duration(*RegressionOutDirRefreshInterval) * time.Second)
 		}

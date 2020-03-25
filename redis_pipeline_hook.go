@@ -3,8 +3,9 @@ package gorr
 import (
 	"context"
 	"fmt"
-	"github.com/go-redis/redis"
 	"reflect"
+
+	"github.com/go-redis/redis"
 )
 
 // handle redis pipeline
@@ -64,7 +65,7 @@ func redisPipelineExecTramp(p *redis.Pipeline) ([]redis.Cmder, error) {
 	}
 
 	if p != nil {
-		panic("trampoline redis NewClient() function is not allowed to be called")
+		panic("trampoline function is not allowed to be called directlyis not allowed to be called")
 	}
 
 	return nil, nil
@@ -88,7 +89,7 @@ func redisPipelineExecContextTramp(p *redis.Pipeline, ctx context.Context) ([]re
 	}
 
 	if p != nil {
-		panic("trampoline redis NewClient() function is not allowed to be called")
+		panic("trampoline function is not allowed to be called directlyis not allowed to be called")
 	}
 
 	return nil, nil

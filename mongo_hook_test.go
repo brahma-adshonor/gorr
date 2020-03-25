@@ -65,6 +65,9 @@ func checkCursor(t *testing.T, res *mongo.Cursor) {
 	assert.Equal(t, "dummy mongo err", res.Err().Error())
 
 	assert.False(t, res.Next(context.Background()))
+	assert.False(t, res.TryNext(context.Background()))
+
+	assert.Nil(t, res.Close(context.Background()))
 }
 
 func TestMgConnect(t *testing.T) {
@@ -189,6 +192,10 @@ func mgDummyCollectionCountDocuments(cl *mongo.Collection, ctx context.Context, 
 	return 233, nil
 }
 
+func mgDummyCollectionEstimatedDocumentCount(cl *mongo.Collection, ctx context.Context, opts ...*options.EstimatedDocumentCountOptions) (int64, error) {
+	return 233, nil
+}
+
 func mgDummyCollectionDelete(cl *mongo.Collection, ctx context.Context, filter interface{}, opts ...*options.DeleteOptions) (*mongo.DeleteResult, error) {
 	return &mongo.DeleteResult{DeletedCount: 233}, nil
 }
@@ -249,6 +256,14 @@ func mgDummuyCollectionAggregate(db *mongo.Collection, ctx context.Context, pipe
 	return buildCursor(), nil
 }
 
+func mgDummyDatabaseAggregate(db *mongo.Database, ctx context.Context, pipeline interface{}, opts ...*options.AggregateOptions) (*mongo.Cursor, error) {
+	return buildCursor(), nil
+}
+
+func mgDummyDatabaseListCollections(db *mongo.Database, ctx context.Context, filter interface{}, opts ...*options.ListCollectionsOptions) (*mongo.Cursor, error) {
+	return buildCursor(), nil
+}
+
 func TestMongoClientHook(t *testing.T) {
 	var r1, r2 mongo.ListDatabasesResult
 	{
@@ -279,6 +294,8 @@ func TestMongoClientHook(t *testing.T) {
 		defer gohook.UnHook(mgCollectionFindOneAndReplaceTramp)
 		gohook.Hook(mgCollectionFindOneAndDeleteTramp, mgDummyCollectionFindOneAndDelete, nil)
 		defer gohook.UnHook(mgCollectionFindOneAndDeleteTramp)
+		gohook.Hook(mgCollectionEstimatedDocumentCountTramp, mgDummyCollectionEstimatedDocumentCount, nil)
+		defer gohook.UnHook(mgCollectionEstimatedDocumentCountTramp)
 
 		assert.Nil(t, gohook.Hook(mgCollectionFindOneAndUpdateTramp, mgDummyCollectionFindOneAndUpdate, nil))
 		defer gohook.UnHook(mgCollectionFindOneAndUpdateTramp)
@@ -288,6 +305,10 @@ func TestMongoClientHook(t *testing.T) {
 		defer gohook.UnHook(mgCollectionReplaceOneTramp)
 		assert.Nil(t, gohook.Hook(mgCollectionAggregateTramp, mgDummuyCollectionAggregate, nil))
 		defer gohook.UnHook(mgCollectionAggregateTramp)
+		assert.Nil(t, gohook.Hook(mgDatabaseAggregateTramp, mgDummyDatabaseAggregate, nil))
+		defer gohook.UnHook(mgDatabaseAggregateTramp)
+		assert.Nil(t, gohook.Hook(mgDatabaseListCollectionsTramp, mgDummyDatabaseListCollections, nil))
+		defer gohook.UnHook(mgDatabaseListCollectionsTramp)
 
 		opt := options.Client().ApplyURI("mongodb://localhost:27017")
 		c1, err1 := mongo.Connect(context.Background(), opt)
@@ -314,8 +335,14 @@ func TestMongoClientHook(t *testing.T) {
 		assert.Nil(t, res1.Err())
 		checkSingleResult(t, res1)
 
-		// database RunCommandCursor
+		cr2, err := db.Aggregate(context.Background(), cmd1)
+		checkCursor(t, cr2)
+
 		cmd2 := bson.D{{Key: "$xy", Value: 1}}
+		cr3, err := db.ListCollections(context.Background(), cmd2)
+		checkCursor(t, cr3)
+
+		// database RunCommandCursor
 		res2, err := db.RunCommandCursor(context.Background(), cmd2)
 		assert.Nil(t, err)
 		assert.NotNil(t, res2)
@@ -328,6 +355,10 @@ func TestMongoClientHook(t *testing.T) {
 		cnt, err := cl.CountDocuments(context.Background(), cmd2)
 		assert.Nil(t, err)
 		assert.Equal(t, int64(233), cnt)
+
+		cnt2, err := cl.EstimatedDocumentCount(context.Background())
+		assert.Nil(t, err)
+		assert.Equal(t, int64(233), cnt2)
 
 		resd1, err := cl.DeleteMany(context.Background(), cmd2)
 		assert.Nil(t, err)
@@ -388,6 +419,8 @@ func TestMongoClientHook(t *testing.T) {
 		assert.NotNil(t, c1)
 		assert.NotNil(t, getClientHolder(c1))
 
+		assert.Nil(t, c1.Disconnect(context.Background()))
+
 		filter := bson.D{{Key: "key1", Value: "value1"}}
 		r2, err = c1.ListDatabases(context.Background(), filter)
 		assert.Nil(t, err)
@@ -404,8 +437,13 @@ func TestMongoClientHook(t *testing.T) {
 		assert.Nil(t, res1.Err())
 		checkSingleResult(t, res1)
 
-		// database RunCommandCursor
+		cr2, err := db.Aggregate(context.Background(), cmd1)
+		checkCursor(t, cr2)
 		cmd2 := bson.D{{Key: "$xy", Value: 1}}
+		cr3, err := db.ListCollections(context.Background(), cmd2)
+		checkCursor(t, cr3)
+
+		// database RunCommandCursor
 		res2, err := db.RunCommandCursor(context.Background(), cmd2)
 		assert.Nil(t, err)
 		assert.NotNil(t, res2)
@@ -419,6 +457,10 @@ func TestMongoClientHook(t *testing.T) {
 		cnt, err := cl.CountDocuments(context.Background(), cmd2)
 		assert.Nil(t, err)
 		assert.Equal(t, int64(233), cnt)
+
+		cnt2, err := cl.EstimatedDocumentCount(context.Background())
+		assert.Nil(t, err)
+		assert.Equal(t, int64(233), cnt2)
 
 		resd1, err := cl.DeleteMany(context.Background(), cmd2)
 		assert.Nil(t, err)

@@ -1,4 +1,4 @@
-package gorr 
+package gorr
 
 import (
 	"bytes"
@@ -41,22 +41,6 @@ func mgClientDisconnectHook(c *mongo.Client, ctx context.Context) error {
 	}
 
 	// replaying, no real connection is needed.
-	return nil
-}
-
-func mgClientDisconnectTramp(c *mongo.Client, ctx context.Context) error {
-	fmt.Printf("dummy function for regrestion testing")
-	fmt.Printf("dummy function for regrestion testing:%+v, %+v", c, ctx)
-
-	for i := 0; i < 100000; i++ {
-		fmt.Printf("id:%d\n", i)
-		go func() { fmt.Printf("hello world\n") }()
-	}
-
-	if c != nil {
-		panic("trampoline function is not allowed to be called directlyis not allowed to be called")
-	}
-
 	return nil
 }
 

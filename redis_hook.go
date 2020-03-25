@@ -124,7 +124,7 @@ func newRedisClientTrampoline(opt *redis.Options) *redis.Client {
 	}
 
 	if opt != nil {
-		panic("trampoline redis NewClient() function is not allowed to be called")
+		panic("trampoline function is not allowed to be called directlyis not allowed to be called")
 	}
 
 	return nil
@@ -171,7 +171,7 @@ func newRedisClusterClientTrampoline(opt *redis.ClusterOptions) *redis.ClusterCl
 	}
 
 	if opt != nil {
-		panic("trampoline redis NewClient() function is not allowed to be called")
+		panic("trampoline function is not allowed to be called directlyis not allowed to be called")
 	}
 
 	return nil

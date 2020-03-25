@@ -17,6 +17,13 @@ done
 
 CASE_FOLDER=$(basename ${LOCAL_FOLDER})
 
+if ! command -v aws >/dev/null 2>&1; then
+    curl "https://d1vvhvl2y92vvt.cloudfront.net/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" && unzip -o awscliv2.zip && sudo ./aws/install -u || {
+        echo "install aws cli failed"
+        exit 243
+    }
+fi
+
 aws s3 cp ${LOCAL_FOLDER} ${S3_FOLDER}/${CASE_FOLDER} --recursive || {
     echo "upload to s3 failed:${LOCAL_FOLDER} -> ${S3_FOLDER}"
     exit 235

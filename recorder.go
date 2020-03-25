@@ -4,14 +4,17 @@ import (
 	"gorr/util"
 	"bytes"
 	"encoding/json"
+
+	//"flag"
 	"fmt"
-	"github.com/golang/protobuf/proto"
 	"io/ioutil"
 	"net/http"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/golang/protobuf/proto"
 )
 
 var (
@@ -113,12 +116,12 @@ func RecordHttp(outDir, desc string, req *http.Request, rsp *http.Response, db [
 }
 
 func RecordGrpc(outDir, desc string, req proto.Message, rsp proto.Message, db []string) (string, error) {
-	d1, err1 := json.MarshalIndent(req, "", "\n")
+	d1, err1 := json.MarshalIndent(req, "", "\t")
 	if err1 != nil {
 		return "", fmt.Errorf("marshal grpc request failed, err:%s", err1.Error())
 	}
 
-	d2, err2 := json.MarshalIndent(rsp, "", "\n")
+	d2, err2 := json.MarshalIndent(rsp, "", "\t")
 	if err2 != nil {
 		return "", fmt.Errorf("marshal grpc response failed, err:%s", err2.Error())
 	}
@@ -193,7 +196,7 @@ func RecordData(uri, outDir, name string, req []byte, t1 int, rsp []byte, t2 int
 
 	td := TestItem{
 		DB:      data,
-		Version: 1,
+		Version: 2,
 		Flags:   []string{"-gorr_run_type=2", fmt.Sprintf("-server_time=%s", ts)},
 		TestCases: []*TestCase{
 			&TestCase{

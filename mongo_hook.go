@@ -1,4 +1,4 @@
-package gorr 
+package gorr
 
 import (
 	"bytes"
@@ -71,6 +71,11 @@ type singleResultHolder struct {
 	cookie2  uint64
 }
 
+const (
+	cookieValue1 uint64 = 0x1badf00d2badf00d
+	cookieValue2 uint64 = 0x3badf00d4badf00d
+)
+
 func clientHolderFinalizer(c *clientHolder) {
 	c.cookie1 = 23
 	c.cookie2 = 23
@@ -93,7 +98,7 @@ func getClientHolder(c *mongo.Client) *clientHolder {
 
 	var tmp clientHolder
 	h := (*clientHolder)(unsafe.Pointer(uintptr(unsafe.Pointer(c)) - unsafe.Offsetof(tmp.client)))
-	if h.cookie1 != 0xbadf00d || h.cookie2 != 0xbadf00d {
+	if h.cookie1 != cookieValue1 || h.cookie2 != cookieValue2 {
 		return nil
 	}
 
@@ -107,7 +112,7 @@ func getCursorHolder(c *mongo.Cursor) *cursorHolder {
 	}
 
 	h := (*cursorHolder)(unsafe.Pointer(uintptr(unsafe.Pointer(c)) - unsafe.Offsetof(tmp.cursor)))
-	if h.cookie1 != 0xbadf00d || h.cookie2 != 0xbadf00d {
+	if h.cookie1 != cookieValue1 || h.cookie2 != cookieValue2 {
 		return nil
 	}
 	return h
@@ -120,7 +125,7 @@ func getSingleResultHolder(c *mongo.SingleResult) *singleResultHolder {
 
 	var tmp singleResultHolder
 	h := (*singleResultHolder)(unsafe.Pointer(uintptr(unsafe.Pointer(c)) - unsafe.Offsetof(tmp.ret)))
-	if h.cookie1 != 0xbadf00d || h.cookie2 != 0xbadf00d {
+	if h.cookie1 != cookieValue1 || h.cookie2 != cookieValue2 {
 		return nil
 	}
 	return h
@@ -170,8 +175,8 @@ func buildCursorHolder(data CursorData, cl *mongo.Client) *cursorHolder {
 	h := cursorHolder{}
 
 	h.cd = data
-	h.cookie1 = 0xbadf00d
-	h.cookie2 = 0xbadf00d
+	h.cookie1 = cookieValue1
+	h.cookie2 = cookieValue2
 	h.registry = getRegistryByClient(cl)
 
 	runtime.SetFinalizer(&h, cursorHolderFinalizer)
@@ -198,8 +203,8 @@ func buildSingleResultHolder(d SingleResultData, cl *mongo.Client) *singleResult
 	h := singleResultHolder{}
 
 	h.sd = d
-	h.cookie1 = 0xbadf00d
-	h.cookie2 = 0xbadf00d
+	h.cookie1 = cookieValue1
+	h.cookie2 = cookieValue2
 	h.registry = getRegistryByClient(cl)
 	runtime.SetFinalizer(&h, singleResultHolderFinalizer)
 
@@ -716,8 +721,8 @@ func mgConnectHook(ctx context.Context, opts ...*options.ClientOptions) (*mongo.
 	ch := &clientHolder{
 		client:  *client,
 		opts:    clientOpt,
-		cookie1: 0xbadf00d,
-		cookie2: 0xbadf00d}
+		cookie1: cookieValue1,
+		cookie2: cookieValue2}
 
 	runtime.SetFinalizer(ch, clientHolderFinalizer)
 
