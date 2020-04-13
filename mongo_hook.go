@@ -797,11 +797,13 @@ var (
 	}
 )
 
-func DisableMongoHook() {
+func DisableMongoHook() error {
 	gohook.UnHook(mongo.Connect)
 	for i := range hl {
 		gohook.UnHookMethod(hl[i].obj, hl[i].method)
 	}
+
+    return nil
 }
 
 func EnableMongoHook() error {

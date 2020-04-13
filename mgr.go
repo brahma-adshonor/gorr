@@ -237,6 +237,7 @@ func (r *RegressionMgr) EnableHook() error {
 		HookGrpcInvoke,
 		HookMysqlDriver,
 		HookKafkaProducer,
+        EnableMongoHook,
 	}
 
 	for _, fn := range hk {
@@ -255,6 +256,7 @@ func (r *RegressionMgr) DisableHook() {
 		UnHookGrpcInvoke,
 		UnHookMysqlDriver,
 		UnHookKafkaProducer,
+        DisableMongoHook,
 	}
 
 	for _, fn := range hk {
